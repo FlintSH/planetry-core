@@ -3,8 +3,8 @@ version: '${project.version}'
 main: dev.flint.planetry.core.PlanetryCore
 api-version: '26.1.2'
 authors: [FlintSH]
-description: Persistent game levels, rewards, network mail and placeholders for Planetry.
-softdepend: [Vault, PlaceholderAPI, NetworkInventorySync]
+description: Persistent game levels, rewards, network mail, locked hotbar shortcuts and placeholders for Planetry.
+softdepend: [Vault, PlaceholderAPI, NetworkInventorySync, Nexo]
 commands:
   level:
     aliases: [levels]

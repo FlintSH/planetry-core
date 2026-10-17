@@ -55,6 +55,60 @@ Quest and skill integrations award XP using console commands, for example
 `gamexp give PlayerName 25`. This plugin does not invent quest, journal or skill
 completion events; configure those plugins to run this command when appropriate.
 
+## Locked hotbar items
+
+Quest Book occupies **slot 8** and NovaLink/menu **slot 9** for every player.
+They cannot be moved, dropped, swapped into the offhand, consumed or placed.
+Right click in the main hand runs the configured command; left click does not.
+A short shared cooldown prevents duplicate activations from interaction events.
+These are menu shortcuts, not a quest or menu implementation: configure the
+commands supplied by your quest/menu plugins before using them.
+
+```yaml
+hotbar:
+  enabled: true
+  restore-interval-ticks: 20
+  activation-cooldown-ticks: 6
+  quest-book:
+    nexo-id: your_quest_book_id
+    material: BOOK
+    display-name: '&6Quest Book'
+    command: 'yourquestcommand'
+    executor: player
+  novalink:
+    nexo-id: your_menu_id
+    material: COMPASS
+    display-name: '&bNovaLink'
+    command: 'yourmenucommand'
+    executor: player
+```
+
+The Nexo ID can reference any item defined by the backend's Nexo installation.
+Leave it empty to use the fallback material. Missing Nexo, an unknown ID or an
+unavailable API uses that material and logs a warning; lookup retries when Nexo
+finishes loading its items. Nexo item metadata is retained, then Core applies
+its configured display name and private identity marker. This uses Nexo's
+[documented item builder API](https://github.com/Nexo-MC/Nexo-Documentation/blob/master/community-guides/api.md).
+The actual Nexo version and resource pack require staging validation.
+
+Commands default to empty until configured, omit the leading slash, and accept
+`{player}` and `{uuid}`. `executor: player` uses the player's permissions;
+`executor: console` runs with console authority, so configure trusted commands.
+Names support `&` colors. The slots are fixed; `enabled: false` stops the feature.
+Restart after configuration changes. Existing configurations can add this section;
+missing keys use these defaults. Install matching configuration and Nexo item
+definitions on every participating Paper/Purpur backend, not Velocity.
+
+Items return after joining, changing worlds, respawning or another plugin removing
+them, normally within one second. A server change is a join on the destination.
+Restoration and activation wait for NetworkInventorySync's current-session
+readiness if installed; disabled or incompatible Sync blocks both. No inventory
+state is written while it is loading. Ordinary items already in these slots
+move to empty nonreserved storage slots. If the inventory is full, Core keeps
+them intact and retries when there is room. Their ordinary use/removal remains
+available. Core removes its own items from death drops and restores them after
+respawn; it leaves ordinary possessions and keep-inventory rules alone.
+
 ## Placeholders and the XP bar
 
 | Placeholder | Value |

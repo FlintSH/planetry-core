@@ -53,6 +53,26 @@ mail:
     command-unavailable: '&cA mail command is unavailable on this backend. Your mail is still saved; contact staff or claim on the correct server.'
     review: '&cA mail item needs staff review. It will not be repeated automatically.'
     unavailable: '&cMail storage could not confirm this operation. Contact staff before repeating a send or claim.'
+hotbar:
+  enabled: true
+  # Fixed slots 8 and 9. Restore only after Inventory Sync is ready.
+  restore-interval-ticks: 20
+  activation-cooldown-ticks: 6
+  quest-book:
+    # Optional Nexo item ID; missing Nexo/unknown IDs use the material below.
+    nexo-id: ''
+    material: BOOK
+    display-name: '&6Quest Book'
+    # Right click; no leading slash. Empty disables the action until configured.
+    # Tokens: {player}, {uuid}. executor is player or console.
+    command: ''
+    executor: player
+  novalink:
+    nexo-id: ''
+    material: COMPASS
+    display-name: '&bNovaLink'
+    command: ''
+    executor: player
 messages:
   level: '&d❕ &7You are level &d{level}&7! (&f{gamexp}&7/100 Game XP)'
   hint: '&7↪ Earn Game XP by completing Story Quests, completing your Journal & levelling up your Skills!'

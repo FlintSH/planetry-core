@@ -96,3 +96,32 @@ build and full plugin set there. Check inventory capacity and the chosen reward
 command's behavior when a player's inventory is full. Core does not determine
 whether another plugin silently dropped or rejected a gift. Do not run these
 checks on production or infer a real-client result from the automated fixtures.
+
+## Hotbar validation
+
+The hotbar configuration and event regression tests run with the regular suite.
+The following independent probes run the **same packaged JAR** in the pinned
+Paper server, using real ItemStacks and controlled Player/Inventory/View doubles:
+
+```sh
+python3 scripts/smoke.py target/planetry-core-1.0.0.jar --hotbar
+python3 scripts/smoke.py target/planetry-core-1.0.0.jar --hotbar --without-hooks
+CORE_TEST_TYPE=postgresql CORE_TEST_PORT=5432 CORE_TEST_USER=planetry CORE_TEST_PASSWORD=core-test-only python3 scripts/smoke.py target/planetry-core-1.0.0.jar --hotbar
+CORE_TEST_TYPE=mariadb CORE_TEST_PORT=3306 CORE_TEST_USER=planetry CORE_TEST_PASSWORD=core-test-only python3 scripts/smoke.py target/planetry-core-1.0.0.jar --hotbar
+```
+
+Hooks mode uses a controlled **Nexo API-shape fixture**, not the actual Nexo
+plugin. It checks custom metadata preservation and unknown-ID fallback; the
+without-hooks mode checks missing-Nexo fallback. Fixtures never ship in the
+plugin JAR. Existing XP/mail probes disable hotbar because their player doubles
+do not model inventory interactions. CI retains those eight probes and adds
+four hotbar modes.
+
+Before installation, staging still needs real Minecraft clients with the actual
+Nexo version/resource pack, Purpur and complete plugin set. Check right clicks on
+air/blocks/entities, quest/menu opening and permissions, creative/normal inventory
+screens, drag/shift/number-key/offhand/drop paths, death with both keep-inventory
+settings, full inventory, and actual server transfers while Inventory Sync loads.
+Confirm ordinary items are preserved and both shortcuts appear in slots 8/9 on
+every participating backend. These controlled probes do not prove client rendering
+or network-transfer compatibility. No production installation is automated.

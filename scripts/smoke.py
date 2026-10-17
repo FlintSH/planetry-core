@@ -48,7 +48,8 @@ def build_fixture(java, classpath, work, name, source, dependencies=(), vault_ap
     classes.mkdir()
     subprocess.run(
         [str(java.with_name("javac")), "-cp", classpath, "-d", str(classes),
-         str(ROOT / "scripts/probe" / (source + ".java"))], check=True
+         str(ROOT / "scripts/probe" / (source + ".java")),
+         *([str(ROOT / "scripts/probe/nexo/NexoItems.java")] if source == "NexoFixture" else [])], check=True
     )
     if vault_api is not None:
         # Test-only Vault plugin owns the unmodified provided Economy API classes.
@@ -67,6 +68,8 @@ def build_fixture(java, classpath, work, name, source, dependencies=(), vault_ap
         descriptor += "depend: [" + ", ".join(dependencies) + "]\n"
     if source == "CoreProbe":
         descriptor += "commands:\n  coreprobeaward:\n    description: Test-only console reward recorder\n"
+    if source == "HotbarProbe":
+        descriptor += "commands:\n  hotbarprobe:\n    description: Test-only hotbar action recorder\n"
     if source == "MailProbe":
         descriptor += "commands:\n  mailprobeaward:\n    description: Test-only console mail recorder\n"
     (classes / "plugin.yml").write_text(descriptor, encoding="utf-8")
@@ -76,7 +79,7 @@ def build_fixture(java, classpath, work, name, source, dependencies=(), vault_ap
     )
 
 
-def test_config(plugin, without_hooks=False, mail=False):
+def test_config(plugin, without_hooks=False, mail=False, hotbar=False):
     """Return isolated test configuration; all credentials are test-only inputs."""
     engine = os.environ.get("CORE_TEST_TYPE", "file").lower()
     if engine not in {"file", "postgresql", "mariadb"}:
@@ -84,7 +87,7 @@ def test_config(plugin, without_hooks=False, mail=False):
     port = os.environ.get("CORE_TEST_PORT", "5432" if engine == "postgresql" else "3306")
     prefix = "smoke_" + os.urandom(5).hex() + "_"
     quote = json.dumps
-    commands = "[]" if without_hooks or mail else "['coreprobeaward {player} {level} {money}']"
+    commands = "[]" if without_hooks or mail or hotbar else "['coreprobeaward {player} {level} {money}']"
     config = f"""server-id: {quote('smoke-' + os.urandom(5).hex())}
 storage:
   type: {engine}
@@ -101,10 +104,31 @@ display:
   refresh-ticks: 20
   data-refresh-ticks: 100
 rewards:
-  money: {0.0 if mail else 150.0}
+  money: {0.0 if mail or hotbar else 150.0}
   currency-label: Credits
   commands: {commands}
 """
+    if hotbar:
+        config += """hotbar:
+  enabled: true
+  restore-interval-ticks: 2
+  activation-cooldown-ticks: 6
+  quest-book:
+    nexo-id: probe_book
+    material: BOOK
+    display-name: '&6Quest Book'
+    command: 'hotbarprobe quest {player} {uuid}'
+    executor: player
+  novalink:
+    nexo-id: missing_probe_item
+    material: COMPASS
+    display-name: '&bNovaLink'
+    command: 'hotbarprobe menu {player} {uuid}'
+    executor: console
+"""
+    else:
+        # Legacy player doubles deliberately do not implement inventory gameplay.
+        config += "hotbar:\n  enabled: false\n"
     if mail:
         # A registered test expansion exercises actual PAPI without LuckPerms.
         config += "mail:\n  rank-placeholder: '%mailprobe_rank%'\n  fallback-rank: '&cStaff'\n"
@@ -119,9 +143,12 @@ rewards:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("plugin", type=pathlib.Path)
+    parser.add_argument("--hotbar", action="store_true", help="run independent locked-hotbar coverage; hooks mode uses a controlled Nexo API fixture")
     parser.add_argument("--mail", action="store_true", help="run independent mail acceptance coverage instead of the XP probe")
     parser.add_argument("--without-hooks", action="store_true", help="run without Vault, PlaceholderAPI or Inventory Sync")
     arguments = parser.parse_args()
+    if arguments.mail and arguments.hotbar:
+        parser.error("--mail and --hotbar select separate probes")
     java = pathlib.Path(os.environ["JAVA_HOME"]) / "bin/java"
     plugin = arguments.plugin.resolve()
     entries = (ROOT / "target/test-classpath.txt").read_text(encoding="utf-8").strip().split(os.pathsep)
@@ -132,7 +159,7 @@ def main():
     paper = fetch(PAPER_URL, PAPER_SHA)
     papi = None if arguments.without_hooks else fetch(PAPI_URL, PAPI_SHA)
     os.environ.setdefault("CORE_TEST_PASSWORD", "")
-    engine, config = test_config(plugin, arguments.without_hooks, arguments.mail)
+    engine, config = test_config(plugin, arguments.without_hooks, arguments.mail, arguments.hotbar)
     with tempfile.TemporaryDirectory(prefix="planetry-core-paper-") as temporary:
         work = pathlib.Path(temporary)
         (work / "plugins/PlanetryCore").mkdir(parents=True)
@@ -151,12 +178,17 @@ def main():
             'generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}\n',
             encoding="utf-8"
         )
-        if arguments.without_hooks and not arguments.mail:
+        if arguments.without_hooks and not arguments.mail and not arguments.hotbar:
             build_fixture(java, classpath, work, "NoHooksProbe", "NoHooksProbe", ("PlanetryCore",))
         elif not arguments.without_hooks:
             build_fixture(java, classpath, work, "Vault", "VaultFixture", vault_api=vault_api)
             build_fixture(java, classpath, work, "NetworkInventorySync", "InventoryFixture")
-        if arguments.mail:
+        if arguments.hotbar:
+            dependencies = ("PlanetryCore",) if arguments.without_hooks else ("PlanetryCore", "NetworkInventorySync", "Nexo")
+            if not arguments.without_hooks:
+                build_fixture(java, classpath, work, "Nexo", "NexoFixture")
+            build_fixture(java, classpath, work, "HotbarProbe", "HotbarProbe", dependencies)
+        elif arguments.mail:
             dependencies = ("PlanetryCore",) if arguments.without_hooks else (
                 "PlanetryCore", "PlaceholderAPI", "Vault", "NetworkInventorySync")
             build_fixture(java, classpath, work, "MailProbe", "MailProbe", dependencies)
@@ -189,13 +221,15 @@ def main():
             while not output.empty():
                 lines.append(output.get_nowait())
             log = "".join(lines)
-            success = "CORE_MAIL_PROBE_OK" if arguments.mail else (
+            success = "CORE_HOTBAR_PROBE_OK" if arguments.hotbar else "CORE_MAIL_PROBE_OK" if arguments.mail else (
                 "CORE_NO_HOOKS_PROBE_OK" if arguments.without_hooks else "CORE_PROBE_OK")
-            if success not in log or "CORE_PROBE_FAILED" in log or "CORE_MAIL_PROBE_FAILED" in log:
+            if success not in log or "CORE_PROBE_FAILED" in log or "CORE_MAIL_PROBE_FAILED" in log or "CORE_HOTBAR_PROBE_FAILED" in log:
                 raise AssertionError("PlanetryCore probe failed")
             if process.returncode != 0:
                 raise AssertionError(f"Paper exited {process.returncode}")
-            if arguments.mail:
+            if arguments.hotbar:
+                checks = "locked hotbar, item preservation, commands, lifecycle and readiness; controlled Nexo API fixture" if not arguments.without_hooks else "locked hotbar without optional hooks and Nexo fallback"
+            elif arguments.mail:
                 checks = "mail commands, reminders, explicit claims, permission/session/readiness gates, broadcast snapshots, bounded batches and failure review/ack"
                 if arguments.without_hooks:
                     checks += " without Vault/PlaceholderAPI/Inventory Sync"

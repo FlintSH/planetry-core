@@ -1,5 +1,7 @@
 package dev.flint.planetry.core;
 
+import dev.flint.planetry.core.hotbar.HotbarService;
+import dev.flint.planetry.core.hotbar.HotbarSettings;
 import dev.flint.planetry.core.progression.*;
 import dev.flint.planetry.core.storage.*;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -30,12 +32,14 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
     private Settings settings;
     private PlanetryExpansion expansion;
     private MailService mail;
+    private HotbarService hotbar;
     private volatile boolean stopping;
     private long nextRewardWarning;
 
     @Override public void onEnable() {
         try {
             saveDefaultConfig(); settings = Settings.read(getConfig());
+            HotbarSettings hotbarSettings = HotbarSettings.read(getConfig());
             store = Settings.openStore(getConfig(), getDataFolder().toPath());
             worker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(1024), task -> {
                 Thread thread = new Thread(task, "PlanetryCore-storage"); thread.setDaemon(true); return thread;
@@ -57,6 +61,10 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
             Objects.requireNonNull(getCommand("sendmail")).setExecutor(mail);
             getCommand("sendmail").setTabCompleter(mail);
             mail.start();
+            hotbar = new HotbarService(this, hotbarSettings,
+                    player -> inventoryReady(player.getUniqueId()));
+            getServer().getPluginManager().registerEvents(hotbar, this);
+            hotbar.start();
             if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
                 expansion = PlanetryExpansion.attach(this);
             }
@@ -73,6 +81,7 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
 
     @Override public void onDisable() {
         stopping = true;
+        if (hotbar != null) hotbar.close();
         if (mail != null) mail.close();
         if (expansion != null) expansion.detach();
         for (Player player : online.values()) if (player.isOnline()) player.sendExperienceChange(player.getExp(), player.getLevel());
