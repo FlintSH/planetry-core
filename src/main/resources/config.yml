@@ -2,7 +2,7 @@
 # Quest/skill plugins award XP through the console: gamexp give Player 25
 server-id: survival-1
 # Player and staff text lives in lang/en.yml and lang/de.yml (MiniMessage).
-# Set a language filename without .yml; restart after changing text or language.
+# Set a language filename without .yml; use /planetrycore reload for text/language edits.
 language: en
 storage:
   # file is for ONE server only. For network progress choose mariadb/postgresql

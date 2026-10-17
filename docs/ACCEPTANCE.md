@@ -138,5 +138,30 @@ also exercises a rank prefix ending in spaces and a reset, while preserving the
 existing durable claims, readiness and recovery checks.
 
 On staging, inspect both languages with a real client, edit a translation and
-restart, and confirm LuckPerms prefixes and Nexo item names/models with the real
+run `/planetrycore reload`, and confirm LuckPerms prefixes and Nexo item names/models with the real
 plugins. Automated Paper players are controlled doubles, not connected clients.
+
+## Language reload and optional message integrations
+
+```sh
+python3 scripts/smoke.py target/planetry-core-1.0.0.jar --language
+python3 scripts/smoke.py target/planetry-core-1.0.0.jar --language --without-hooks
+CORE_TEST_TYPE=postgresql CORE_TEST_PORT=5432 CORE_TEST_USER=planetry CORE_TEST_PASSWORD=core-test-only python3 scripts/smoke.py target/planetry-core-1.0.0.jar --language
+CORE_TEST_TYPE=mariadb CORE_TEST_PORT=3306 CORE_TEST_USER=planetry CORE_TEST_PASSWORD=core-test-only python3 scripts/smoke.py target/planetry-core-1.0.0.jar --language
+```
+
+These checks use the same packaged JAR on real Paper, actual PlaceholderAPI,
+controlled players and a controlled Nexo glyph/shift resolver fixture. They
+cover language-only reload and selection changes, failure retaining active
+messages, permissions and completions, recipient PAPI expansion, mail messages,
+and literal dynamic values. The without-hooks mode checks graceful absence.
+Unit tests also cover immutable snapshots, no file writes or legacy imports on
+reload, missing files, invalid YAML and non-text values.
+Fixtures are excluded from release artifacts.
+
+On staging, confirm glyph rendering and permissions with the actual Nexo build
+and resource pack, both languages, the actual PAPI expansions and real clients.
+Edit a message and change the language selection, reload without reconnecting,
+and check mail notices/buttons/hover text and staff command feedback. Confirm
+unauthorized staff cannot reload. These automated fixtures do not prove client
+rendering, Purpur or compatibility with the complete network plugin set.

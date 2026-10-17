@@ -98,6 +98,20 @@ jobs:
           CORE_TEST_TYPE: mariadb
           CORE_TEST_PORT: '3306'
         run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --hotbar
+      - name: Real Paper language reload, PlaceholderAPI and native Nexo tag fixture
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --language
+      - name: Real Paper language reload without optional plugins
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --language --without-hooks
+      - name: Real Paper language reload with packaged PostgreSQL driver
+        env:
+          CORE_TEST_TYPE: postgresql
+          CORE_TEST_PORT: '5432'
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --language
+      - name: Real Paper language reload with packaged MariaDB driver
+        env:
+          CORE_TEST_TYPE: mariadb
+          CORE_TEST_PORT: '3306'
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --language
       - name: Checksum tested artifacts
         working-directory: target
         run: sha256sum planetry-core-*.jar mariadb-java-client-*-sources.jar > SHA256SUMS

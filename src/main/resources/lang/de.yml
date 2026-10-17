@@ -1,6 +1,10 @@
 # MiniMessage-Texte. {Platzhalter} bleiben erhalten und werden sicher eingesetzt.
-# Fehlende Einträge verwenden die mitgelieferte Sprache, danach Englisch. Neustart nötig.
+# Fehlende Einträge verwenden die mitgelieferte Sprache, danach Englisch. Mit /planetrycore reload neu laden.
 messages:
+  reload-usage: '<gray>/planetrycore reload'
+  reload-no-permission: '<red>Du darfst Core-Nachrichten nicht neu laden.'
+  reload-success: '<green>Core-Sprachdateien neu geladen ({language}).'
+  reload-failed: '<red>Sprachdateien konnten nicht neu geladen werden. Die bisherigen Nachrichten bleiben aktiv; prüfe die Serverkonsole.'
   level: '<light_purple>❕ <gray>Du bist Level <light_purple>{level}<gray>! (<white>{gamexp}<gray>/100 Game XP)'
   hint: '<gray>↪ Verdiene Game XP durch Story-Quests, dein Journal und das Verbessern deiner Fähigkeiten!'
   level-up: '<light_purple>❕ LEVELAUFSTIEG! <gray>Du bist jetzt <light_purple>Level {level}<gray>!'

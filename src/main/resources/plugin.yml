@@ -5,7 +5,11 @@ api-version: '26.1.2'
 authors: [FlintSH]
 description: Persistent game levels, rewards, network mail, locked hotbar shortcuts and placeholders for Planetry.
 softdepend: [Vault, PlaceholderAPI, NetworkInventorySync, Nexo]
+# Permissions are checked by executors so language denials use the actual recipient.
 commands:
+  planetrycore:
+    description: Reload language messages without restarting the backend.
+    usage: /planetrycore reload
   level:
     aliases: [levels]
     description: Show your game level and XP progress.
@@ -13,15 +17,16 @@ commands:
   gamexp:
     description: Manage player game XP and inspect reward delivery.
     usage: /gamexp give|take|view|setlevel <player> [amount]
-    permission: planetry.adam.gamexp
   mail:
     description: Claim your saved mail.
     usage: /mail
   sendmail:
     description: Send network mail and inspect uncertain deliveries.
     usage: /sendmail player <username|uuid> <command> or /sendmail all <command>
-    permission: planetry.admin.sendmail
 permissions:
+  planetry.admin.reload:
+    description: Reload Core language files and the language selection.
+    default: op
   planetry.admin.sendmail:
     description: Send mail to individual players or the online network and inspect delivery claims.
     default: op

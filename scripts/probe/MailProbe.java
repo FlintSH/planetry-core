@@ -86,8 +86,9 @@ public final class MailProbe extends JavaPlugin {
                 staff = new Fake("MailAdmin", true);
                 check(core.getCommand("mail").getPermission() == null
                                 || core.getCommand("mail").getPermission().isBlank(), "/mail requires a permission");
-                check(PERMISSION.equals(core.getCommand("sendmail").getPermission()),
-                        "/sendmail permission differs from the public contract");
+                var permission = Bukkit.getPluginManager().getPermission(PERMISSION);
+                check(permission != null && permission.getDefault() == org.bukkit.permissions.PermissionDefault.OP,
+                        "/sendmail permission registration differs from the public contract");
                 permissionAndSyntax();
             } catch (Throwable error) { fail(error); }
         });

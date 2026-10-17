@@ -23,9 +23,10 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
-/** Startup-loaded MiniMessage translations. Runtime values are never parsed as markup. */
+/** Immutable MiniMessage translations. Runtime values are never parsed as markup. */
 public final class Language {
     private static final MiniMessage MINI = MiniMessage.miniMessage();
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
@@ -34,14 +35,39 @@ public final class Language {
     private static final String[] COLORS = {"black", "dark_blue", "dark_green", "dark_aqua", "dark_red", "dark_purple",
             "gold", "gray", "dark_gray", "blue", "green", "aqua", "red", "light_purple", "yellow", "white"};
     private final Map<String, String> templates;
+    private final String name;
+    private final LanguageIntegrations integrations;
 
-    private Language(Map<String, String> templates) { this.templates = Map.copyOf(templates); }
-
-    public static Language load(JavaPlugin plugin) throws IOException, InvalidConfigurationException {
-        return load(plugin.getDataFolder().toPath(), plugin.getConfig());
+    private Language(Map<String, String> templates, String name, LanguageIntegrations integrations) {
+        this.templates = Map.copyOf(templates); this.name = name; this.integrations = integrations;
     }
 
+    public static Language load(JavaPlugin plugin) throws IOException, InvalidConfigurationException {
+        return load(plugin.getDataFolder().toPath(), plugin.getConfig()).withIntegrations(plugin);
+    }
+
+    /** Read just the language selection, without changing the plugin's active configuration. */
+    public static Language reload(JavaPlugin plugin) throws IOException, InvalidConfigurationException {
+        var config = new YamlConfiguration();
+        config.load(plugin.getDataFolder().toPath().resolve("config.yml").toFile());
+        return reload(plugin.getDataFolder().toPath(), config).withIntegrations(plugin);
+    }
+
+    private Language withIntegrations(JavaPlugin plugin) {
+        return new Language(templates, name, new LanguageIntegrations(plugin));
+    }
+
+    public String name() { return name; }
+
     static Language load(Path data, FileConfiguration config) throws IOException, InvalidConfigurationException {
+        return read(data, config, true);
+    }
+
+    static Language reload(Path data, FileConfiguration config) throws IOException, InvalidConfigurationException {
+        return read(data, config, false);
+    }
+
+    private static Language read(Path data, FileConfiguration config, boolean install) throws IOException, InvalidConfigurationException {
         Object selection = config.get("language", "en");
         if (!(selection instanceof String selected) || !selected.matches("[A-Za-z0-9][A-Za-z0-9_-]{0,31}"))
             throw new IllegalArgumentException("language must name a lang/*.yml file, for example en or de");
@@ -50,13 +76,14 @@ public final class Language {
         Path directory = data.resolve("lang");
         Path selectedFile = directory.resolve(selected + ".yml");
         boolean existing = Files.exists(selectedFile);
-        if (!existing && !bundled.containsKey(selected))
+        if (!existing && (!install || !bundled.containsKey(selected)))
             throw new IllegalArgumentException("Selected language '" + selected + "' is missing. Create lang/" + selected
-                    + ".yml or set language to en or de, then restart.");
+                    + ".yml or set language to an existing file.");
         YamlConfiguration custom = new YamlConfiguration();
         if (existing) custom.load(selectedFile.toFile());
         // Validate before writing anything, including files with partial custom translations.
         strings(custom, "lang/" + selected + ".yml");
+        if (!install) return merged(selected, bundled, custom);
         Path marker = directory.resolve(".legacy-config-imported");
         boolean importLegacy = !Files.exists(marker);
         boolean changed = false;
@@ -84,10 +111,14 @@ public final class Language {
             }
         }
         if (importLegacy) Files.writeString(marker, "Legacy config messages imported once. Edit lang/*.yml from now on.\n", StandardCharsets.UTF_8);
+        return merged(selected, bundled, custom);
+    }
+
+    private static Language merged(String selected, Map<String, YamlConfiguration> bundled, YamlConfiguration custom) {
         Map<String, String> result = new HashMap<>(strings(bundled.get("en"), "bundled English"));
         if (bundled.containsKey(selected)) result.putAll(strings(bundled.get(selected), "bundled language"));
         result.putAll(strings(custom, "lang/" + selected + ".yml"));
-        return new Language(result);
+        return new Language(result, selected, null);
     }
 
     private static YamlConfiguration bundled(String name) throws IOException, InvalidConfigurationException {
@@ -136,10 +167,23 @@ public final class Language {
 
     /** Component substitutions are for already-rendered trusted formatting, such as sender ranks. */
     public Component text(String key, Map<String, String> values, Map<String, Component> components) {
+        return text(null, key, values, components);
+    }
+
+    public Component text(CommandSender recipient, String key, Map<String, String> values) {
+        return text(recipient, key, values, Map.of());
+    }
+
+    public Component text(CommandSender recipient, String key, Map<String, String> values, Map<String, Component> components) {
         Objects.requireNonNull(values, "values");
         Objects.requireNonNull(components, "components");
         var resolver = TagResolver.builder();
-        var matcher = TOKEN.matcher(legacy(templates.getOrDefault(key, key), resolver));
+        String source = templates.getOrDefault(key, key);
+        if (integrations != null) {
+            source = integrations.placeholders(source, recipient, resolver);
+            resolver.resolver(integrations.glyphs(recipient));
+        }
+        var matcher = TOKEN.matcher(legacy(source, resolver));
         StringBuilder template = new StringBuilder();
         int index = 0;
         while (matcher.find()) {

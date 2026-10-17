@@ -18,6 +18,7 @@ import java.util.logging.Level;
 
 public final class PlanetryCore extends JavaPlugin implements Listener, TabCompleter {
     private static final String PERMISSION = "planetry.adam.gamexp";
+    private static final String RELOAD_PERMISSION = "planetry.admin.reload";
     private final Map<UUID, Progress> cache = new ConcurrentHashMap<>();
     // Only touched on the server thread. Object identity fences callbacks from old sessions.
     private final Map<UUID, Player> online = new HashMap<>();
@@ -56,12 +57,12 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
                     player -> message(player, "vanilla-xp-locked", Map.of())), this);
             Objects.requireNonNull(getCommand("level")).setExecutor(this);
             Objects.requireNonNull(getCommand("gamexp")).setExecutor(this);
-            getCommand("gamexp").permissionMessage(language.text("messages.no-permission", Map.of()));
             getCommand("gamexp").setTabCompleter(this);
             Objects.requireNonNull(getCommand("mail")).setExecutor(mail);
             Objects.requireNonNull(getCommand("sendmail")).setExecutor(mail);
-            getCommand("sendmail").permissionMessage(language.text("mail.no-permission", Map.of()));
             getCommand("sendmail").setTabCompleter(mail);
+            Objects.requireNonNull(getCommand("planetrycore")).setExecutor(this);
+            getCommand("planetrycore").setTabCompleter(this);
             mail.start();
             hotbar = new HotbarService(this, hotbarSettings,
                     player -> inventoryReady(player.getUniqueId()));
@@ -157,6 +158,23 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (stopping || store == null) { message(sender, "unavailable", Map.of()); return true; }
+        if (command.getName().equalsIgnoreCase("planetrycore")) {
+            if (!sender.hasPermission(RELOAD_PERMISSION)) { message(sender, "reload-no-permission", Map.of()); return true; }
+            if (args.length != 1 || !args[0].equalsIgnoreCase("reload")) {
+                message(sender, "reload-usage", Map.of()); return true;
+            }
+            Language replacement;
+            try {
+                replacement = Language.reload(this);
+            } catch (Exception | LinkageError error) {
+                getLogger().log(Level.WARNING, "Language reload failed; the previous messages remain active.", error);
+                message(sender, "reload-failed", Map.of());
+                return true;
+            }
+            language = replacement;
+            message(sender, "reload-success", Map.of("language", replacement.name()));
+            return true;
+        }
         if (command.getName().equalsIgnoreCase("level")) {
             if (!(sender instanceof Player player)) { message(sender, "players-only", Map.of()); return true; }
             Progress progress = cache.get(player.getUniqueId());
@@ -225,6 +243,10 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
         message(sender, "reward-usage", Map.of()); return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        if (command.getName().equalsIgnoreCase("planetrycore")) {
+            return sender.hasPermission(RELOAD_PERMISSION) && args.length == 1
+                    && "reload".startsWith(args[0].toLowerCase(Locale.ROOT)) ? List.of("reload") : List.of();
+        }
         if (!sender.hasPermission(PERMISSION)) return List.of();
         List<String> options = args.length == 1 ? List.of("give", "take", "view", "setlevel", "rewardstatus")
                 : args.length == 2 ? getServer().getOnlinePlayers().stream().map(Player::getName).toList() : List.of();
@@ -288,7 +310,7 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
         return value;
     }
     private void message(CommandSender sender, String key, Map<String, String> values) {
-        sender.sendMessage(language.text("messages." + key, values, values.containsKey("currency")
+        sender.sendMessage(language.text(sender, "messages." + key, values, values.containsKey("currency")
                 ? Map.of("currency", Language.format(settings.currency())) : Map.of()));
     }
     private void unavailable(CommandSender sender) { message(sender, "unavailable", Map.of()); }

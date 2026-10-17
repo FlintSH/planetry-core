@@ -1,6 +1,10 @@
 # MiniMessage text. Keep {tokens}; inserted values are plain text, never markup.
-# Missing entries use this bundled language, then bundled English. Restart to reload.
+# Missing entries use this bundled language, then bundled English. Use /planetrycore reload after edits.
 messages:
+  reload-usage: '<gray>/planetrycore reload'
+  reload-no-permission: '<red>You do not have permission to reload Core messages.'
+  reload-success: '<green>Core language messages reloaded ({language}).'
+  reload-failed: '<red>Language reload failed. Previous messages are still active; check the server console.'
   level: '<light_purple>❕ <gray>You are level <light_purple>{level}<gray>! (<white>{gamexp}<gray>/100 Game XP)'
   hint: '<gray>↪ Earn Game XP by completing Story Quests, completing your Journal & levelling up your Skills!'
   level-up: '<light_purple>❕ LEVEL UP! <gray>You are now <light_purple>Level {level}<gray>!'

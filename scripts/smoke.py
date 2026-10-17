@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise PlanetryCore inside a disposable Paper 26.1.2 server.
 
-Usage: python3 scripts/smoke.py target/planetry-core-VERSION.jar [--mail] [--without-hooks]
+Usage: python3 scripts/smoke.py target/planetry-core-VERSION.jar [--mail|--hotbar|--language] [--without-hooks]
 Requires JAVA_HOME (JDK 25) and target/test-classpath.txt from Maven.
 CORE_TEST_TYPE defaults to file; postgresql/mariadb use CORE_TEST_* variables
 pointing to a throwaway database. Never reads production configuration.
@@ -49,7 +49,8 @@ def build_fixture(java, classpath, work, name, source, dependencies=(), vault_ap
     subprocess.run(
         [str(java.with_name("javac")), "-cp", classpath, "-d", str(classes),
          str(ROOT / "scripts/probe" / (source + ".java")),
-         *([str(ROOT / "scripts/probe/nexo/NexoItems.java")] if source == "NexoFixture" else [])], check=True
+         *([str(path) for path in sorted((ROOT / "scripts/probe/nexo").glob("*.java"))]
+           if source == "NexoFixture" else [])], check=True
     )
     if vault_api is not None:
         # Test-only Vault plugin owns the unmodified provided Economy API classes.
@@ -79,7 +80,7 @@ def build_fixture(java, classpath, work, name, source, dependencies=(), vault_ap
     )
 
 
-def test_config(plugin, without_hooks=False, mail=False, hotbar=False):
+def test_config(plugin, without_hooks=False, mail=False, hotbar=False, language=False):
     """Return isolated test configuration; all credentials are test-only inputs."""
     engine = os.environ.get("CORE_TEST_TYPE", "file").lower()
     if engine not in {"file", "postgresql", "mariadb"}:
@@ -87,7 +88,7 @@ def test_config(plugin, without_hooks=False, mail=False, hotbar=False):
     port = os.environ.get("CORE_TEST_PORT", "5432" if engine == "postgresql" else "3306")
     prefix = "smoke_" + os.urandom(5).hex() + "_"
     quote = json.dumps
-    commands = "[]" if without_hooks or mail or hotbar else "['coreprobeaward {player} {level} {money}']"
+    commands = "[]" if without_hooks or mail or hotbar or language else "['coreprobeaward {player} {level} {money}']"
     config = f"""server-id: {quote('smoke-' + os.urandom(5).hex())}
 storage:
   type: {engine}
@@ -104,7 +105,7 @@ display:
   refresh-ticks: 20
   data-refresh-ticks: 100
 rewards:
-  money: {0.0 if mail or hotbar else 150.0}
+  money: {0.0 if mail or hotbar or language else 150.0}
   currency-label: Credits
   commands: {commands}
 """
@@ -141,10 +142,11 @@ def main():
     parser.add_argument("plugin", type=pathlib.Path)
     parser.add_argument("--hotbar", action="store_true", help="run independent locked-hotbar coverage; hooks mode uses a controlled Nexo API fixture")
     parser.add_argument("--mail", action="store_true", help="run independent mail acceptance coverage instead of the XP probe")
-    parser.add_argument("--without-hooks", action="store_true", help="run without Vault, PlaceholderAPI or Inventory Sync")
+    parser.add_argument("--language", action="store_true", help="run language/reload coverage; hooks mode uses actual PlaceholderAPI and controlled native Nexo tag resolvers")
+    parser.add_argument("--without-hooks", action="store_true", help="run without Vault, PlaceholderAPI, Inventory Sync or Nexo")
     arguments = parser.parse_args()
-    if arguments.mail and arguments.hotbar:
-        parser.error("--mail and --hotbar select separate probes")
+    if sum((arguments.mail, arguments.hotbar, arguments.language)) > 1:
+        parser.error("--mail, --hotbar and --language select separate probes")
     java = pathlib.Path(os.environ["JAVA_HOME"]) / "bin/java"
     plugin = arguments.plugin.resolve()
     entries = (ROOT / "target/test-classpath.txt").read_text(encoding="utf-8").strip().split(os.pathsep)
@@ -155,7 +157,7 @@ def main():
     paper = fetch(PAPER_URL, PAPER_SHA)
     papi = None if arguments.without_hooks else fetch(PAPI_URL, PAPI_SHA)
     os.environ.setdefault("CORE_TEST_PASSWORD", "")
-    engine, config = test_config(plugin, arguments.without_hooks, arguments.mail, arguments.hotbar)
+    engine, config = test_config(plugin, arguments.without_hooks, arguments.mail, arguments.hotbar, arguments.language)
     with tempfile.TemporaryDirectory(prefix="planetry-core-paper-") as temporary:
         work = pathlib.Path(temporary)
         (work / "plugins/PlanetryCore").mkdir(parents=True)
@@ -174,12 +176,18 @@ def main():
             'generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}\n',
             encoding="utf-8"
         )
-        if arguments.without_hooks and not arguments.mail and not arguments.hotbar:
+        if arguments.without_hooks and not arguments.mail and not arguments.hotbar and not arguments.language:
             build_fixture(java, classpath, work, "NoHooksProbe", "NoHooksProbe", ("PlanetryCore",))
         elif not arguments.without_hooks:
             build_fixture(java, classpath, work, "Vault", "VaultFixture", vault_api=vault_api)
             build_fixture(java, classpath, work, "NetworkInventorySync", "InventoryFixture")
-        if arguments.hotbar:
+        if arguments.language:
+            dependencies = ("PlanetryCore",) if arguments.without_hooks else (
+                "PlanetryCore", "PlaceholderAPI", "Vault", "NetworkInventorySync", "Nexo")
+            if not arguments.without_hooks:
+                build_fixture(java, classpath, work, "Nexo", "NexoFixture")
+            build_fixture(java, classpath, work, "LanguageProbe", "LanguageProbe", dependencies)
+        elif arguments.hotbar:
             dependencies = ("PlanetryCore",) if arguments.without_hooks else ("PlanetryCore", "NetworkInventorySync", "Nexo")
             if not arguments.without_hooks:
                 build_fixture(java, classpath, work, "Nexo", "NexoFixture")
@@ -217,13 +225,17 @@ def main():
             while not output.empty():
                 lines.append(output.get_nowait())
             log = "".join(lines)
-            success = "CORE_HOTBAR_PROBE_OK" if arguments.hotbar else "CORE_MAIL_PROBE_OK" if arguments.mail else (
+            success = "CORE_LANGUAGE_PROBE_OK" if arguments.language else "CORE_HOTBAR_PROBE_OK" if arguments.hotbar else "CORE_MAIL_PROBE_OK" if arguments.mail else (
                 "CORE_NO_HOOKS_PROBE_OK" if arguments.without_hooks else "CORE_PROBE_OK")
-            if success not in log or "CORE_PROBE_FAILED" in log or "CORE_MAIL_PROBE_FAILED" in log or "CORE_HOTBAR_PROBE_FAILED" in log:
+            if success not in log or any(marker in log for marker in (
+                    "CORE_PROBE_FAILED", "CORE_MAIL_PROBE_FAILED", "CORE_HOTBAR_PROBE_FAILED", "CORE_LANGUAGE_PROBE_FAILED")):
                 raise AssertionError("PlanetryCore probe failed")
             if process.returncode != 0:
                 raise AssertionError(f"Paper exited {process.returncode}")
-            if arguments.hotbar:
+            if arguments.language:
+                checks = "language-only reload, permissions/arguments/completion, locale switching, failure retention, recipient-aware Core/mail formatting and literal runtime values"
+                checks += "; actual PlaceholderAPI and controlled native Nexo tag API fixture" if not arguments.without_hooks else "; no optional hooks"
+            elif arguments.hotbar:
                 checks = "locked hotbar, item preservation, commands, lifecycle and readiness; controlled Nexo API fixture" if not arguments.without_hooks else "Nexo-only hotbar safely absent without optional hooks"
             elif arguments.mail:
                 checks = "mail commands, reminders, explicit claims, permission/session/readiness gates, broadcast snapshots, bounded batches and failure review/ack"

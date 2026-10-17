@@ -103,10 +103,10 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
         for (MailRecord mail : pending) {
             visible.add(mail.id());
             if (session.notified.add(mail.id())) {
-                Component notice = text("notice", "&d❕ {sender}&7 has sent you a gift!", Map.of(), Map.of("sender", Language.format(mail.sender())));
-                Component claim = text("claim-button", "&a&lCLICK TO CLAIM", Map.of())
+                Component notice = text(session.player, "notice", "&d❕ {sender}&7 has sent you a gift!", Map.of(), Map.of("sender", Language.format(mail.sender())));
+                Component claim = text(session.player, "claim-button", "&a&lCLICK TO CLAIM", Map.of())
                         .clickEvent(ClickEvent.runCommand("/mail"))
-                        .hoverEvent(plugin.language().text("mail.claim-hover", Map.of()));
+                        .hoverEvent(plugin.language().text(session.player, "mail.claim-hover", Map.of()));
                 session.player.sendMessage(notice.append(Component.space()).append(claim));
             }
         }
@@ -173,7 +173,7 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
                 case "player" -> saveMail(sender, Optional.of(id), identity, commandText);
                 case "status" -> submit(() -> store.review(id, 100), records -> {
                     say(sender, "review-header", "Mail requiring review: {count} (up to 100 shown)", Map.of("count", Integer.toString(records.size())));
-                    for (MailRecord record : records) sender.sendMessage(plugin.language().text("mail.review-entry",
+                    for (MailRecord record : records) sender.sendMessage(plugin.language().text(sender, "mail.review-entry",
                             Map.of("id", record.id().toString(), "state", record.state().name(), "server", record.serverId(), "command", record.command()),
                             Map.of("sender", Language.format(record.sender()))));
                 }, error -> unavailable(sender));
@@ -211,9 +211,9 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
     }
     private String identity(CommandSender sender) {
         Component identity = sender instanceof Player player
-                ? plugin.language().text("mail.sender-player", Map.of("player", player.getName()),
+                ? plugin.language().text(sender, "mail.sender-player", Map.of("player", player.getName()),
                         Map.of("rank", MailRanks.trimTrailing(Language.format(MailRanks.rank(plugin, player)))))
-                : plugin.language().text("mail.sender-console", Map.of());
+                : plugin.language().text(sender, "mail.sender-console", Map.of());
         return MailRanks.snapshot(identity);
     }
     private void deliver(Session session, List<MailRecord> pending, int index, int delivered) {
@@ -279,13 +279,13 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
         String prefix = args.length == 0 ? "" : args[args.length - 1].toLowerCase(Locale.ROOT);
         return options.stream().filter(value -> value.toLowerCase(Locale.ROOT).startsWith(prefix)).toList();
     }
-    private Component text(String key, String fallback, Map<String, String> values) {
-        return plugin.language().text("mail." + key, values);
+    private Component text(CommandSender recipient, String key, String fallback, Map<String, String> values) {
+        return plugin.language().text(recipient, "mail." + key, values);
     }
-    private Component text(String key, String fallback, Map<String, String> values, Map<String, Component> components) {
-        return plugin.language().text("mail." + key, values, components);
+    private Component text(CommandSender recipient, String key, String fallback, Map<String, String> values, Map<String, Component> components) {
+        return plugin.language().text(recipient, "mail." + key, values, components);
     }
-    private void say(CommandSender sender, String key, String fallback, Map<String, String> values) { sender.sendMessage(text(key, fallback, values)); }
+    private void say(CommandSender sender, String key, String fallback, Map<String, String> values) { sender.sendMessage(text(sender, key, fallback, values)); }
     private void unavailable(CommandSender sender) {
         say(sender, "unavailable", "&cMail storage could not confirm this operation. Contact staff before repeating a send or claim.", Map.of());
     }

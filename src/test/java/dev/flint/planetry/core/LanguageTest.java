@@ -165,6 +165,44 @@ class LanguageTest {
         assertTrue(error.getMessage().contains("mail.empty"));
     }
 
+    @Test void reloadBuildsANewSnapshotAndKeepsExistingReadersUnchanged() throws Exception {
+        var config = new YamlConfiguration();
+        Language original = Language.load(data, config);
+        Path file = translation("en", "mail:\n  empty: '<gold>Reloaded inbox'\n");
+        Language replacement = Language.reload(data, config);
+        assertEquals("You have no unclaimed mail.", plain.serialize(original.text("mail.empty", Map.of())));
+        assertEquals("Reloaded inbox", plain.serialize(replacement.text("mail.empty", Map.of())));
+        assertEquals("en", replacement.name());
+        assertEquals("mail:\n  empty: '<gold>Reloaded inbox'\n", Files.readString(file));
+        config.set("language", "de");
+        assertEquals("Du hast keine unabgeholte Post.", plain.serialize(Language.reload(data, config).text("mail.empty", Map.of())));
+    }
+
+    @Test void reloadDoesNotInstallFilesOrImportLegacyMessages() throws Exception {
+        translation("en", "mail:\n  empty: '<gold>Current inbox'\n");
+        var config = new YamlConfiguration();
+        config.set("mail.messages.empty", "Legacy inbox");
+        config.set("messages.loading", "Legacy loading");
+        Language replacement = Language.reload(data, config);
+        assertEquals("Current inbox", plain.serialize(replacement.text("mail.empty", Map.of())));
+        assertEquals("Your game XP is loading. Try again in a moment.", plain.serialize(replacement.text("messages.loading", Map.of())));
+        assertFalse(Files.exists(data.resolve("lang/.legacy-config-imported")));
+        assertFalse(Files.exists(data.resolve("lang/de.yml")));
+    }
+
+    @Test void reloadRejectsMissingFilesBadYamlAndBadValues() throws Exception {
+        var config = new YamlConfiguration();
+        assertThrows(IllegalArgumentException.class, () -> Language.reload(data, config));
+        assertFalse(Files.exists(data.resolve("lang")));
+        Language original = Language.load(data, config);
+        for (String invalid : new String[]{"mail: [broken", "mail:\n  empty: 123\n"}) {
+            Path file = translation("en", invalid);
+            assertThrows(Exception.class, () -> Language.reload(data, config), invalid);
+            assertEquals(invalid, Files.readString(file));
+            assertEquals("You have no unclaimed mail.", plain.serialize(original.text("mail.empty", Map.of())));
+        }
+    }
+
     private Path translation(String name, String content) throws Exception {
         Files.createDirectories(data.resolve("lang"));
         return Files.writeString(data.resolve("lang/" + name + ".yml"), content, StandardCharsets.UTF_8);

@@ -30,6 +30,7 @@ before changing storage or upgrading. Hot reload/plugin managers are unsupported
 
 | Command | Permission | Behavior |
 | --- | --- | --- |
+| `/planetrycore reload` | `planetry.admin.reload` | Reload language messages and the language selection; other settings require restart |
 | `/level`, `/levels` | None | Show your level and current game XP, plus a configurable hint |
 | `/gamexp give <player> <amount>` | `planetry.adam.gamexp` | Add game XP, carrying the remainder across levels |
 | `/gamexp take <player> <amount>` | `planetry.adam.gamexp` | Remove total game XP, reducing levels if needed, with a floor of zero |
@@ -220,8 +221,12 @@ acknowledged this way. Keep backups and do not restore old mail data casually.
 
 `language: en` selects `plugins/PlanetryCore/lang/en.yml`; `language: de` selects
 German. Both files are created on first start. Copy one to another locale name
-and select that name to add a translation. Restart after changing the selection
-or text. The setting applies to the backend, rather than each player's client.
+and select that name to add a translation. Run `/planetrycore reload` after
+changing the selection or text. The permission `planetry.admin.reload` defaults
+to operators; console can also reload. Invalid YAML, non-text entries or missing
+selected files keep the previous message set
+active and report an error. The command reads only the `language` selection
+from `config.yml`; storage, rewards, hotbar and other settings require restart. The setting applies to the backend, rather than each player's client.
 
 Language files contain `messages.*` for game levels and command feedback and
 `mail.*` for mail notices, buttons, hover text, sender formats and staff feedback.
@@ -231,6 +236,27 @@ Use [MiniMessage](https://docs.advntr.dev/minimessage/format.html), for example
 command are inserted literally, so their angle brackets and braces cannot become
 formatting or introduce another substitution. The sender/rank token preserves
 its formatted component. Legacy `&` / `§` colors remain accepted for compatibility.
+
+With PlaceholderAPI enabled, language templates can contain PAPI placeholders,
+for example `<gray>Hello %player_name%, your level is %planetry_level%`.
+Install the matching expansion for placeholders supplied by other plugins.
+They resolve for the **player receiving the message**, including mail notices,
+buttons and hover text. Sender identity templates resolve for the staff member
+when the mail is sent. Console messages leave player placeholders unchanged.
+Missing PlaceholderAPI or unresolved placeholders leave their original text.
+PAPI results support legacy colors; their MiniMessage and glyph tags stay
+literal and cannot add click commands. For Nexo glyphs with custom fonts, use
+direct `<glyph:id>` tags in the language template. Only placeholders written in the language template
+are expanded, once. Stored commands, names and other dynamic values remain literal.
+
+With Nexo enabled, use its native `<glyph:my_glyph>` and `<shift:2>` tags in
+language templates. Core uses Nexo's own MiniMessage resolvers, including
+player-aware glyph handling when that API is available. Nexo defines the glyph
+IDs and formatting options. Missing or incompatible Nexo leaves these tags
+visible. See [Nexo glyphs](https://docs.nexomc.com/configuration/glyphs).
+The actual Nexo version, glyph permissions and resource pack must be checked
+with real clients on staging. Installing or updating optional plugins requires
+a backend restart; the language reload command does not reload plugins.
 
 On the first upgrade, customized `messages.*` and `mail.messages.*` values
 are imported into the selected language file as MiniMessage. Unchanged old
