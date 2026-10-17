@@ -1,6 +1,10 @@
 package dev.flint.planetry.core;
 
 import dev.flint.planetry.core.hotbar.HotbarService;
+import dev.flint.planetry.core.harvest.HarvestService;
+import dev.flint.planetry.core.journal.JournalService;
+import dev.flint.planetry.core.integration.MmoItemsHook;
+import dev.flint.planetry.core.integration.MythicJournalHook;
 import dev.flint.planetry.core.hotbar.HotbarSettings;
 import dev.flint.planetry.core.progression.*;
 import dev.flint.planetry.core.storage.*;
@@ -17,7 +21,7 @@ import java.util.function.Consumer;
 import java.util.logging.Level;
 
 public final class PlanetryCore extends JavaPlugin implements Listener, TabCompleter {
-    private static final String PERMISSION = "planetry.adam.gamexp";
+    private static final String PERMISSION = "planetry.admin.gamexp";
     private static final String RELOAD_PERMISSION = "planetry.admin.reload";
     private final Map<UUID, Progress> cache = new ConcurrentHashMap<>();
     // Only touched on the server thread. Object identity fences callbacks from old sessions.
@@ -33,6 +37,8 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
     private PlanetryExpansion expansion;
     private MailService mail;
     private HotbarService hotbar;
+    private JournalService journal;
+    private HarvestService harvest;
     private volatile boolean stopping;
     private long nextRewardWarning;
 
@@ -64,6 +70,12 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
             Objects.requireNonNull(getCommand("planetrycore")).setExecutor(this);
             getCommand("planetrycore").setTabCompleter(this);
             mail.start();
+            var items = new MmoItemsHook(this);
+            journal = new JournalService(this, Settings.openJournalStore(getConfig(), getDataFolder().toPath()), items);
+            journal.start();
+            harvest = new HarvestService(this, player -> inventoryReady(player.getUniqueId()), items, journal::harvest);
+            harvest.start();
+            MythicJournalHook.attach(this, journal::killed);
             hotbar = new HotbarService(this, hotbarSettings,
                     player -> inventoryReady(player.getUniqueId()));
             getServer().getPluginManager().registerEvents(hotbar, this);
@@ -84,6 +96,8 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
 
     @Override public void onDisable() {
         stopping = true;
+        if (harvest != null) harvest.close();
+        if (journal != null) journal.close();
         if (hotbar != null) hotbar.close();
         if (mail != null) mail.close();
         if (expansion != null) expansion.detach();
@@ -99,6 +113,8 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
 
     public Progress cachedProgress(UUID id) { return cache.get(id); }
     public Language language() { return language; }
+    public JournalService journal() { return journal; }
+    public HarvestService harvest() { return harvest; }
     @EventHandler public void join(PlayerJoinEvent event) { track(event.getPlayer()); }
     private void track(Player player) { online.put(player.getUniqueId(), player); load(player); mail.track(player); }
     @EventHandler public void quit(PlayerQuitEvent event) {

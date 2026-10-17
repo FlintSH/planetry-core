@@ -165,3 +165,40 @@ Edit a message and change the language selection, reload without reconnecting,
 and check mail notices/buttons/hover text and staff command feedback. Confirm
 unauthorized staff cannot reload. These automated fixtures do not prove client
 rendering, Purpur or compatibility with the complete network plugin set.
+
+## Harvest regeneration and Journal
+
+Run `scripts/smoke.py` with `--adventure` for file, PostgreSQL and MariaDB,
+plus `--adventure --without-hooks` for file storage. CI runs all four against the
+same release JAR. The new Journal contracts cover exclusive file ownership,
+checksummed corruption detection, restart persistence, concurrent SQL schema
+initialization and discovery writes, rollback and uncertain commits. Harvest
+unit coverage checks durable bindings/cooldown intents, restart recovery and
+configuration boundaries. Journal coverage checks configuration, pagination,
+literal message values, permission gates, async durability and session fencing.
+
+AdventureProbe uses real Paper blocks, item metadata and inventory menus with
+controlled players. The test-only MMOItems, AuraSkills and MythicMobs classes
+model their documented public APIs. They exercise binding one block without
+changing normal blocks, cooldown restoration, age stages, direct item insertion,
+glowing private overflow, hopper/pickup guards, Inventory Sync readiness,
+Journal menus and extraction refusal, admin add/remove, harvest and mob unlocks,
+placeholders and interactive unlock messages. Missing integrations must leave
+nodes unconsumed. Fixtures are never included in the release JAR.
+
+Public integration contracts: [MMOItems API](https://docs.phoenixdevt.fr/mmoitems/api/main.html),
+[AuraSkills API](https://wiki.aurelium.dev/auraskills/api) and
+[MythicMobs death event](https://mythiccraft.io/javadocs/mythic/io/lumine/mythic/bukkit/events/MythicMobDeathEvent.html).
+Core resolves optional APIs at runtime and refuses unsupported hooks.
+
+Before installation, staging must use the actual MMOItems/MythicLib, AuraSkills
+and MythicMobs builds that support the target Minecraft version, the permission
+and protection plugins, Purpur and real clients. Check native skill/drop hooks
+do not double reward a managed node, world protection cancellation order, crop
+support, visibility to a second player including reconnect/chunk loading, glowing
+items, Journal hover and click rendering, and shared discoveries across backend
+transfers. No API fixture proves compatibility with the full plugin set or a
+client/resource pack. Harvest bindings and cooldowns belong to each backend's
+local world and require local disk backups; Journal discoveries share Core's
+SQL storage when configured. Never share or roll back world/node data independently
+without review. No production installation or database operation is automated.

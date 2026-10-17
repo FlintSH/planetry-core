@@ -112,6 +112,20 @@ jobs:
           CORE_TEST_TYPE: mariadb
           CORE_TEST_PORT: '3306'
         run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --language
+      - name: Real Paper harvest and Journal with controlled RPG API fixtures
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --adventure
+      - name: Real Paper harvest and Journal without optional hooks
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --adventure --without-hooks
+      - name: Real Paper Journal and harvest with PostgreSQL
+        env:
+          CORE_TEST_TYPE: postgresql
+          CORE_TEST_PORT: '5432'
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --adventure
+      - name: Real Paper Journal and harvest with MariaDB
+        env:
+          CORE_TEST_TYPE: mariadb
+          CORE_TEST_PORT: '3306'
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --adventure
       - name: Checksum tested artifacts
         working-directory: target
         run: sha256sum planetry-core-*.jar mariadb-java-client-*-sources.jar > SHA256SUMS

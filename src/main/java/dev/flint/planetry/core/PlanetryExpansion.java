@@ -25,6 +25,8 @@ final class PlanetryExpansion extends PlaceholderExpansion {
     @Override public boolean persist() { return true; }
     @Override public String onRequest(OfflinePlayer player, @NotNull String params) {
         if (player == null) return "";
+        if (params.toLowerCase(java.util.Locale.ROOT).startsWith("journal_"))
+            return plugin.journal() == null ? "" : plugin.journal().placeholder(player.getUniqueId(), params.toLowerCase(java.util.Locale.ROOT));
         var progress = plugin.cachedProgress(player.getUniqueId());
         if (progress == null) return "";
         return switch (params.toLowerCase(java.util.Locale.ROOT)) {

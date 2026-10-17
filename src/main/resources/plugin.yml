@@ -4,12 +4,22 @@ main: dev.flint.planetry.core.PlanetryCore
 api-version: '26.1.2'
 authors: [FlintSH]
 description: Persistent game levels, rewards, network mail, locked hotbar shortcuts and placeholders for Planetry.
-softdepend: [Vault, PlaceholderAPI, NetworkInventorySync, Nexo]
+softdepend: [Vault, PlaceholderAPI, NetworkInventorySync, Nexo, MMOItems, AuraSkills, MythicMobs]
 # Permissions are checked by executors so language denials use the actual recipient.
 commands:
   planetrycore:
     description: Reload language messages without restarting the backend.
     usage: /planetrycore reload
+  journal:
+    aliases: [collections]
+    description: Browse your collected Journal entries.
+    usage: /journal [category]
+  journaladmin:
+    description: Add or remove a Journal entry for a player.
+    usage: /journaladmin <player> <add|remove> <id>
+  harvest:
+    description: Bind configurable regenerating harvest nodes.
+    usage: /harvest wand <profile>
   level:
     aliases: [levels]
     description: Show your game level and XP progress.
@@ -24,12 +34,18 @@ commands:
     description: Send network mail and inspect uncertain deliveries.
     usage: /sendmail player <username|uuid> <command> or /sendmail all <command>
 permissions:
+  planetry.admin.journal:
+    description: Manage Journal entries and open another player's Journal.
+    default: op
+  planetry.admin.harvest:
+    description: Bind and remove regenerating harvest nodes.
+    default: op
   planetry.admin.reload:
     description: Reload Core language files and the language selection.
     default: op
   planetry.admin.sendmail:
     description: Send mail to individual players or the online network and inspect delivery claims.
     default: op
-  planetry.adam.gamexp:
+  planetry.admin.gamexp:
     description: Manage player game XP and levels.
     default: op

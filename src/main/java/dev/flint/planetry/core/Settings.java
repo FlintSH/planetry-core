@@ -2,6 +2,7 @@ package dev.flint.planetry.core;
 
 import dev.flint.planetry.core.storage.*;
 import dev.flint.planetry.core.mail.*;
+import dev.flint.planetry.core.journal.storage.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import java.nio.file.Path;
 import java.sql.DriverManager;
@@ -40,6 +41,13 @@ record Settings(boolean xpBar, boolean lockVanillaExperience, int refreshTicks, 
         if (type.equals("file")) return new FileMailStore(data.resolve("mail"));
         Database db = database(c, type);
         return new JdbcMailStore(db.connections(), db.dialect(), db.prefix());
+    }
+
+    static JournalStore openJournalStore(FileConfiguration c, Path data) throws Exception {
+        String type = c.getString("storage.type", "file").toLowerCase(Locale.ROOT);
+        if (type.equals("file")) return new FileJournalStore(data.resolve("journal"));
+        Database db = database(c, type);
+        return new JdbcJournalStore(db.connections(), db.dialect(), db.prefix());
     }
 
     private record Database(ConnectionFactory connections, JdbcProgressStore.Dialect dialect, String prefix) { }

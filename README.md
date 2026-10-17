@@ -32,11 +32,11 @@ before changing storage or upgrading. Hot reload/plugin managers are unsupported
 | --- | --- | --- |
 | `/planetrycore reload` | `planetry.admin.reload` | Reload language messages and the language selection; other settings require restart |
 | `/level`, `/levels` | None | Show your level and current game XP, plus a configurable hint |
-| `/gamexp give <player> <amount>` | `planetry.adam.gamexp` | Add game XP, carrying the remainder across levels |
-| `/gamexp take <player> <amount>` | `planetry.adam.gamexp` | Remove total game XP, reducing levels if needed, with a floor of zero |
-| `/gamexp view <player>` | `planetry.adam.gamexp` | Show current saved level/progress, including offline players |
-| `/gamexp setlevel <player> <level>` | `planetry.adam.gamexp` | Set the level and reset progress to zero, without rewards |
-| `/gamexp rewardstatus <player>` | `planetry.adam.gamexp` | List claimed/uncertain rewards requiring review |
+| `/gamexp give <player> <amount>` | `planetry.admin.gamexp` | Add game XP, carrying the remainder across levels |
+| `/gamexp take <player> <amount>` | `planetry.admin.gamexp` | Remove total game XP, reducing levels if needed, with a floor of zero |
+| `/gamexp view <player>` | `planetry.admin.gamexp` | Show current saved level/progress, including offline players |
+| `/gamexp setlevel <player> <level>` | `planetry.admin.gamexp` | Set the level and reset progress to zero, without rewards |
+| `/gamexp rewardstatus <player>` | `planetry.admin.gamexp` | List claimed/uncertain rewards requiring review |
 | `/gamexp ackreward <player> <claim-uuid>` | Console only | Acknowledge a reviewed reward without repeating its effects |
 
 Staff permission defaults to operators. Targets accept an online or cached known
@@ -53,8 +53,8 @@ administrative adjustment: it also advances the reward high-water mark when
 raising a level, with no retroactive rewards. Existing queued rewards remain.
 
 Quest and skill integrations award XP using console commands, for example
-`gamexp give PlayerName 25`. This plugin does not invent quest, journal or skill
-completion events; configure those plugins to run this command when appropriate.
+`gamexp give PlayerName 25`. Quest plugins can run this command when appropriate. Harvest nodes and Journal
+discoveries use the separate configuration described below.
 
 ## Locked hotbar items
 
@@ -267,6 +267,24 @@ After upgrading, edit the language files for text changes. Missing translation
 keys fall back to the bundled locale, then English. The sent-command line is
 separate from the send-success message so existing customized success text still
 shows the saved command.
+
+## Harvest nodes and Journal
+
+Configure location-bound regenerating blocks in `harvest.yml`, then use
+`/harvest wand <profile>` with `planetry.admin.harvest` to bind individual blocks.
+Profiles select MMOItems drops, AuraSkills XP, cooldown blocks and crop growth.
+Only bound locations change; ordinary blocks retain their normal behavior.
+Harvesting starts disabled until configured. See [harvest setup](docs/HARVEST.md).
+
+`/journal` (alias `/collections`) opens the seven collection categories without a
+permission. Define MMOItems entries and harvest/MythicMob triggers in `journal.yml`.
+`/journaladmin <player> <add|remove> <id>` requires `planetry.admin.journal`;
+console can also use `journal open <player> <category>`. Discoveries share Core's
+configured storage. See [Journal setup and placeholders](docs/JOURNAL.md).
+
+The game XP permission is now **`planetry.admin.gamexp`**. Update permission grants
+that still use the retired `planetry.adam.gamexp` spelling. Restart after editing
+harvest or Journal definitions; `/planetrycore reload` reloads language files only.
 
 ## Storage
 

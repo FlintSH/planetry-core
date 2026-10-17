@@ -1,0 +1,41 @@
+# Restart the Paper/Purpur backend after changing this file. Language reload is separate.
+# Replace every EXAMPLE_* MMOItems id below with your actual type/id before enabling.
+enabled: false
+# Bounds local synchronous durability work; existing bindings remain protected if disabled.
+max-nodes: 2000
+poll-ticks: 10
+profiles:
+  obsidian:
+    source: OBSIDIAN
+    cooldown-block: BEDROCK
+    cooldown-seconds: 60
+    growth-stages: false
+    drops:
+      - type: MATERIAL
+        id: EXAMPLE_OBSIDIAN
+        amount: 1
+    skill: auraskills/mining
+    skill-xp: 2.0
+  oak:
+    source: OAK_LOG
+    cooldown-block: AIR
+    cooldown-seconds: 45
+    growth-stages: false
+    drops:
+      - type: MATERIAL
+        id: EXAMPLE_OAK
+        amount: 1
+    skill: auraskills/foraging
+    skill-xp: 2.0
+  wheat:
+    source: WHEAT
+    # Ageable sources use growth stages instead of a placeholder when enabled.
+    cooldown-block: AIR
+    cooldown-seconds: 30
+    growth-stages: true
+    drops:
+      - type: MATERIAL
+        id: EXAMPLE_WHEAT
+        amount: 1
+    skill: auraskills/farming
+    skill-xp: 1.0

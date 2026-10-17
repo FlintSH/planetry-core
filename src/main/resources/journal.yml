@@ -1,0 +1,77 @@
+# Restart PlanetryCore after editing this file. Journal state uses Core's storage mode.
+# Entry IDs are globally unique lowercase letters/digits/_/- (1..64 characters).
+# Empty categories stay visible. Replace example IDs with your actual MMOItems definitions.
+categories:
+  farming:
+    name: Farming
+    material: WHEAT
+    entries: {}
+    # entries:
+    #   moon_wheat:
+    #     mmoitems-type: MATERIAL
+    #     mmoitems-id: MOON_WHEAT
+    #     harvest-nodes: [moon_wheat] # harvest.yml node definition ID, not every WHEAT block
+    #     mythic-mobs: []
+  foraging:
+    name: Foraging
+    material: OAK_SAPLING
+    entries: {}
+  fighting:
+    name: Fighting
+    material: IRON_SWORD
+    entries: {}
+    # An entry with mythic-mobs: [MoonSlime] unlocks for that MythicMob's player killer.
+  mining:
+    name: Mining
+    material: IRON_PICKAXE
+    entries: {}
+  fishing:
+    name: Fishing
+    material: FISHING_ROD
+    entries: {}
+  rockets:
+    name: Rockets
+    material: FIREWORK_ROCKET
+    entries: {}
+  achievements:
+    name: Achievements
+    material: NETHER_STAR
+    entries: {}
+    # Omit both trigger lists for entries awarded only by /journaladmin.
+
+# MiniMessage and legacy colors are supported. Runtime tokens are literal components.
+# {item} keeps the MMOItems display name and shows its actual item/lore on hover.
+# {open} opens the player's own category through Core's fixed console open command.
+# No arbitrary console command template is accepted from players or this message.
+messages:
+  title: '<dark_gray>Journal'
+  category-title: '<dark_gray>{category} <gray>{page}/{pages}'
+  category-lore: '<gray>Collected: <white>{unlocked}/{max}'
+  locked-name: '<gray>Unknown: <white>{id}'
+  locked-lore: '<gray>Discover this item to unlock its journal entry.'
+  found-lore: '<green>Collected'
+  missing-name: '<red>Unavailable item: {id}'
+  missing-lore: '<gray>MMOItems definition unavailable: {type}/{item}'
+  empty: '<gray>No entries configured in this category.'
+  back: '<yellow>Categories'
+  previous: '<yellow>Previous page'
+  next: '<yellow>Next page'
+  open: '<green>[OPEN]'
+  open-hover: '<gray>Open the {category} journal.'
+  unlock:
+    - ''
+    - '<green>Journal unlocked: {item} {open}'
+    - '<gray>{category}: {unlocked}/{max}'
+    - ''
+  loading: '<gray>Your journal is loading. Try again shortly.'
+  denied: '<red>You do not have permission.'
+  player-only: '<red>Use /journal open <player> <category> from console.'
+  usage: '<red>Usage: /journal [category] or /journal open <player> <category>'
+  admin-usage: '<red>Usage: /journaladmin <known-name|uuid> <add|remove> <entryId>'
+  unknown-entry: '<red>Unknown journal entry: {id}'
+  unknown-category: '<red>Unknown journal category: {category}'
+  unknown-player: '<red>Player not found. Use an online/known name or a UUID.'
+  added: "<green>Added {id} to {player}'s journal."
+  removed: "<green>Removed {id} from {player}'s journal."
+  unchanged: "<gray>{player}'s journal already has the requested state for {id}."
+  unavailable: '<red>Journal storage could not confirm this operation. Try again shortly.'
