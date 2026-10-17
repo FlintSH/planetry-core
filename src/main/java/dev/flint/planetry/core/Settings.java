@@ -3,13 +3,12 @@ package dev.flint.planetry.core;
 import dev.flint.planetry.core.storage.*;
 import dev.flint.planetry.core.mail.*;
 import org.bukkit.configuration.file.FileConfiguration;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.util.*;
 
 record Settings(boolean xpBar, boolean lockVanillaExperience, int refreshTicks, int dataRefreshTicks, double money,
-                String currency, List<String> commands, String serverId, Map<String, String> messages) {
+                String currency, List<String> commands, String serverId) {
     static Settings read(FileConfiguration c) {
         double money = c.getDouble("rewards.money", 150);
         int refresh = c.getInt("display.refresh-ticks", 20);
@@ -25,11 +24,8 @@ record Settings(boolean xpBar, boolean lockVanillaExperience, int refreshTicks, 
         for (String command : commands)
             if (command.isBlank() || command.startsWith("/") || command.contains("\n") || command.contains("\r") || command.length() > 1024)
                 throw new IllegalArgumentException("Reward commands must be single console commands without a leading slash");
-        Map<String, String> messages = new HashMap<>();
-        var section = Objects.requireNonNull(c.getConfigurationSection("messages"), "Missing messages section");
-        for (String key : section.getKeys(false)) messages.put(key, section.getString(key, ""));
         return new Settings(c.getBoolean("display.xp-bar", true), c.getBoolean("vanilla-experience.lock", true), refresh, dataRefresh, money,
-                c.getString("rewards.currency-label", "Credits"), List.copyOf(commands), serverId, Map.copyOf(messages));
+                c.getString("rewards.currency-label", "Credits"), List.copyOf(commands), serverId);
     }
 
     static ProgressStore openStore(FileConfiguration c, Path data) throws Exception {

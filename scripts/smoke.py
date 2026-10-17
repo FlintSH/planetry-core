@@ -114,15 +114,11 @@ rewards:
   restore-interval-ticks: 2
   activation-cooldown-ticks: 6
   quest-book:
-    nexo-id: probe_book
-    material: BOOK
-    display-name: '&6Quest Book'
+    nexo-id: quest_book
     command: 'hotbarprobe quest {player} {uuid}'
     executor: player
   novalink:
-    nexo-id: missing_probe_item
-    material: COMPASS
-    display-name: '&bNovaLink'
+    nexo-id: novalink
     command: 'hotbarprobe menu {player} {uuid}'
     executor: console
 """
@@ -133,10 +129,10 @@ rewards:
         # A registered test expansion exercises actual PAPI without LuckPerms.
         config += "mail:\n  rank-placeholder: '%mailprobe_rank%'\n  fallback-rank: '&cStaff'\n"
     with zipfile.ZipFile(plugin) as archive:
-        defaults = archive.read("config.yml").decode("utf-8")
-    if "\nmessages:" not in defaults:
-        raise RuntimeError("Packaged config.yml is missing its messages section")
-    config += "messages:" + defaults.split("\nmessages:", 1)[1]
+        for language in ("en", "de"):
+            if f"lang/{language}.yml" not in archive.namelist():
+                raise RuntimeError(f"Packaged language file is missing: {language}")
+    config += "language: en\n"
     return engine, config
 
 
@@ -228,7 +224,7 @@ def main():
             if process.returncode != 0:
                 raise AssertionError(f"Paper exited {process.returncode}")
             if arguments.hotbar:
-                checks = "locked hotbar, item preservation, commands, lifecycle and readiness; controlled Nexo API fixture" if not arguments.without_hooks else "locked hotbar without optional hooks and Nexo fallback"
+                checks = "locked hotbar, item preservation, commands, lifecycle and readiness; controlled Nexo API fixture" if not arguments.without_hooks else "Nexo-only hotbar safely absent without optional hooks"
             elif arguments.mail:
                 checks = "mail commands, reminders, explicit claims, permission/session/readiness gates, broadcast snapshots, bounded batches and failure review/ack"
                 if arguments.without_hooks:

@@ -109,7 +109,7 @@ public final class HotbarProbe extends JavaPlugin implements CommandExecutor {
                     readiness(true);
                     awaitInitial();
                 });
-            } else awaitInitial();
+            } else absentNexo();
         });
         // An exception inside another plugin's event handler can otherwise strand a probe.
         after(1200, () -> { throw new IllegalStateException("Global probe timeout at " + stage); });
@@ -136,18 +136,23 @@ public final class HotbarProbe extends JavaPlugin implements CommandExecutor {
     }
 
     private void assertItems() {
-        checkItem(player.items[7], "quest-book", hooks ? Material.ENCHANTED_BOOK : Material.BOOK, "Quest Book");
-        checkItem(player.items[8], "novalink", Material.COMPASS, "NovaLink");
-        var pdc = player.items[7].getItemMeta().getPersistentDataContainer();
-        NamespacedKey nexo = new NamespacedKey("nexo", "id");
-        if (hooks) {
-            check("probe_book".equals(pdc.get(nexo, PersistentDataType.STRING)), "Nexo fixture PDC was discarded");
-            var lore = player.items[7].getItemMeta().lore();
-            check(lore != null && lore.stream().map(HotbarProbe::plain).anyMatch("Nexo fixture metadata"::equals),
-                    "Nexo fixture lore was discarded");
-        } else check(!pdc.has(nexo), "Fallback unexpectedly carries Nexo metadata");
-        check(!player.items[8].getItemMeta().getPersistentDataContainer().has(nexo),
-                "Missing Nexo ID did not use the fallback");
+        checkItem(player.items[7], "quest-book", Material.ENCHANTED_BOOK, "Nexo Quest Book");
+        checkItem(player.items[8], "novalink", Material.COMPASS, "Nexo NovaLink");
+        for (int slot : new int[]{7, 8}) {
+            String nexoId = slot == 7 ? "quest_book" : "novalink";
+            String unique = player.items[slot].getItemMeta().getPersistentDataContainer()
+                    .get(new NamespacedKey("nexo", "unique"), PersistentDataType.STRING);
+            check(unique != null, "Nexo's per-build random metadata was lost");
+            ItemStack expected = originalNexo(unique);
+            check(expected.getAmount() == 3 && !expected.getItemMeta().getPersistentDataContainer().has(marker),
+                    "Core mutated the original Nexo builder stack");
+            expected.setAmount(1);
+            ItemStack actual = player.items[slot].clone();
+            var meta = actual.getItemMeta();
+            meta.getPersistentDataContainer().remove(marker);
+            actual.setItemMeta(meta);
+            check(expected.equals(actual), "Core changed Nexo item metadata for " + nexoId + ": " + actual);
+        }
     }
 
     private void checkItem(ItemStack item, String id, Material material, String name) {
@@ -155,7 +160,59 @@ public final class HotbarProbe extends JavaPlugin implements CommandExecutor {
                 id + " has wrong material/amount: " + item);
         check(id.equals(item.getItemMeta().getPersistentDataContainer().get(marker, PersistentDataType.STRING)),
                 id + " lacks its real plugin PDC identity");
-        check(name.equals(plain(item.getItemMeta().displayName())), id + " has wrong configured display name");
+        check(name.equals(plain(item.getItemMeta().displayName())), id + " lost the Nexo display name");
+    }
+
+    private void absentNexo() {
+        stage = "missing Nexo has no shortcuts or inventory displacement";
+        ItemStack[] before = player.snapshot();
+        int writes = player.writes;
+        after(10, () -> {
+            unchanged(player, before, writes, "Missing Nexo changed ordinary possessions");
+            check(ownedCount() == 0 && activations.isEmpty(), "Missing Nexo created or activated shortcuts");
+            allowed(click(player.raw(7), ClickType.LEFT, InventoryAction.PICKUP_ALL), "ordinary item without Nexo");
+            // Preserve emeralds while exercising the empty unavailable slot and legacy cleanup.
+            player.put(0, player.items[8]);
+            player.put(8, null);
+            allowed(click(player.raw(8), ClickType.LEFT, InventoryAction.PLACE_ALL), "empty slot without Nexo");
+            allowed(drag(new ItemStack(Material.APPLE), player.raw(8)), "drag into unavailable shortcut slot");
+            allowed(number(0, 8), "number-key swap into unavailable shortcut slot");
+            allowed(new PlayerPickBlockEvent(player.player, Bukkit.getWorlds().getFirst().getSpawnLocation().getBlock(),
+                    false, 8, 10), "pick into unavailable shortcut slot");
+            ItemStack stale = legacy("novalink");
+            player.put(8, stale);
+            player.put(4, legacy("quest-book"));
+            player.cursor = stale.clone();
+            player.held = 8;
+            interact(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND, stale);
+            check(activations.isEmpty(), "A legacy generic shortcut activated without Nexo");
+            after(10, () -> {
+                check(ownedCount() == 0 && empty(player.cursor) && empty(player.items[8]), "Legacy shortcuts survived without Nexo");
+                possessions();
+                check(player.items[7].equals(diamonds), "Missing Nexo displaced an ordinary reserved item");
+                succeed();
+            });
+        });
+    }
+
+    private ItemStack legacy(String id) {
+        ItemStack item = named(Material.BOOK, 1, "Legacy generic shortcut");
+        item.editMeta(meta -> meta.getPersistentDataContainer().set(marker, PersistentDataType.STRING, id));
+        return item;
+    }
+
+    private ItemStack originalNexo(String unique) {
+        try {
+            Plugin nexo = Bukkit.getPluginManager().getPlugin("Nexo");
+            Class<?> api = Class.forName("com.nexomc.nexo.api.NexoItems", true, nexo.getClass().getClassLoader());
+            return (ItemStack) api.getMethod("builtItem", String.class).invoke(null, unique);
+        } catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
+    }
+
+    private void nexoState(String name, boolean value) {
+        try { Bukkit.getPluginManager().getPlugin("Nexo").getClass().getField(name).setBoolean(
+                Bukkit.getPluginManager().getPlugin("Nexo"), value); }
+        catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
     }
 
     private void movement() {
@@ -409,7 +466,48 @@ public final class HotbarProbe extends JavaPlugin implements CommandExecutor {
                     check(player.items[1].equals(emeralds), "Second reserved possession was not preserved");
                     check(count(filler) == 32L * 64 && player.drops == 0, "Retry lost/dropped ordinary possessions");
                     assertItems();
-                    disabledSync();
+                    nexoOutages();
+                });
+            });
+        });
+    }
+
+    private void nexoOutages() {
+        stage = "Nexo disable, stale generic items, unknown IDs and recovery";
+        Plugin nexo = Bukkit.getPluginManager().getPlugin("Nexo");
+        int commands = activations.size();
+        player.held = 7;
+        Bukkit.getPluginManager().disablePlugin(nexo);
+        interact(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND, quest);
+        check(activations.size() == commands, "Disabled Nexo activated a cached shortcut");
+        waitFor(() -> ownedCount() == 0, () -> {
+            check(empty(player.items[7]) && empty(player.items[8]), "Disabled Nexo left generic replacements");
+            // A prior release's owned generic items are cleaned up, never activated.
+            player.put(7, legacy("quest-book"));
+            player.cursor = legacy("novalink");
+            interact(Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND, player.items[7]);
+            after(5, () -> {
+                check(empty(player.items[7]) && empty(player.cursor), "Disabled Nexo retained stale generic items");
+                check(activations.size() == commands, "A legacy generic item activated a command");
+                player.put(8, player.items[1]);
+                player.put(1, null);
+                nexoState("novaLinkAvailable", false);
+                Bukkit.getPluginManager().enablePlugin(nexo);
+                waitFor(() -> owned(player.items[7]), () -> {
+                    check(player.items[8].equals(emeralds) && empty(player.items[1]), "An unknown Nexo ID displaced ordinary items");
+                    nexoState("invalidQuest", true);
+                    waitFor(() -> empty(player.items[7]), () -> {
+                        allowed(click(player.raw(7), ClickType.LEFT, InventoryAction.PLACE_ALL), "empty slot for invalid Nexo result");
+                        check(player.items[8].equals(emeralds), "Invalid Nexo results displaced possessions");
+                        nexoState("invalidQuest", false);
+                        nexoState("novaLinkAvailable", true);
+                        waitFor(this::restored, () -> {
+                            possessions();
+                            assertItems();
+                            check(player.items[1].equals(emeralds), "Nexo recovery lost the displaced ordinary item");
+                            disabledSync();
+                        });
+                    });
                 });
             });
         });
@@ -448,9 +546,9 @@ public final class HotbarProbe extends JavaPlugin implements CommandExecutor {
         check(player.drops == 0, "The hotbar dropped a player possession");
         finished = true;
         getLogger().info("CORE_HOTBAR_PROBE_OK: controlled players in Paper; "
-                + (hooks ? "controlled Nexo API fixture only, readiness and disabled-sync gates verified"
-                         : "optional hooks absent, fallback materials verified")
-                + "; movement, commands, conservation, lifecycle, duplicates and death verified");
+                + (hooks ? "controlled Nexo API fixture only; metadata, missing/invalid items, recovery, readiness, "
+                         + "disabled integrations, movement, commands, conservation, lifecycle, duplicates and death verified"
+                         : "optional hooks absent; no shortcuts, no commands, legacy cleanup and possession conservation verified"));
         Bukkit.shutdown();
     }
 

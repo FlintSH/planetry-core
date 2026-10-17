@@ -1,6 +1,9 @@
 # Restart after changes. Fixed progression: 100 game XP per level, starting at 0.
 # Quest/skill plugins award XP through the console: gamexp give Player 25
 server-id: survival-1
+# Player and staff text lives in lang/en.yml and lang/de.yml (MiniMessage).
+# Set a language filename without .yml; restart after changing text or language.
+language: en
 storage:
   # file is for ONE server only. For network progress choose mariadb/postgresql
   # on every participating server, with the SAME database and table-prefix.
@@ -36,52 +39,22 @@ mail:
   # Rank is captured when staff send mail. Requires the matching PAPI expansion.
   # Falls back to a Vault chat prefix/primary group, then fallback-rank.
   rank-placeholder: '%luckperms_prefix%'
-  fallback-rank: '&cStaff'
+  fallback-rank: '<red>Staff'
   # Mail polling and presence heartbeat run every 5 seconds. Crash presence expires after 30s.
-  messages:
-    notice: '&d❕ {sender}&7 has sent you a gift!'
-    claim-button: '&a&lCLICK TO CLAIM'
-    sent: '&aMail saved for {count} player(s).'
-    empty: '&7You have no unclaimed mail.'
-    claimed: '&aClaimed {count} mail item(s). Use /mail again if more remain.'
-    busy: '&7Your mail is already being claimed.'
-    no-permission: '&cYou do not have permission to send mail.'
-    players-only: '&cPlayers can claim mail with /mail.'
-    not-ready: '&7Please wait until you are alive and your inventory has loaded, then use /mail again.'
-    unknown-player: '&cPlayer not found. Use a player who has joined a participating backend, or their UUID.'
-    invalid-command: '&cUse one console command without a leading slash (maximum 2048 characters). Tokens: {player}, {uuid}.'
-    command-unavailable: '&cA mail command is unavailable on this backend. Your mail is still saved; contact staff or claim on the correct server.'
-    review: '&cA mail item needs staff review. It will not be repeated automatically.'
-    unavailable: '&cMail storage could not confirm this operation. Contact staff before repeating a send or claim.'
 hotbar:
   enabled: true
   # Fixed slots 8 and 9. Restore only after Inventory Sync is ready.
   restore-interval-ticks: 20
   activation-cooldown-ticks: 6
   quest-book:
-    # Optional Nexo item ID; missing Nexo/unknown IDs use the material below.
-    nexo-id: ''
-    material: BOOK
-    display-name: '&6Quest Book'
+    # Nexo is required. Missing/unknown IDs leave the shortcut unavailable and retry.
+    # The Nexo stack supplies its appearance, name, lore and components.
+    nexo-id: quest_book
     # Right click; no leading slash. Empty disables the action until configured.
     # Tokens: {player}, {uuid}. executor is player or console.
     command: ''
     executor: player
   novalink:
-    nexo-id: ''
-    material: COMPASS
-    display-name: '&bNovaLink'
+    nexo-id: novalink
     command: ''
     executor: player
-messages:
-  level: '&d❕ &7You are level &d{level}&7! (&f{gamexp}&7/100 Game XP)'
-  hint: '&7↪ Earn Game XP by completing Story Quests, completing your Journal & levelling up your Skills!'
-  level-up: '&d❕ LEVEL UP! &7You are now &dLevel {level}&7!'
-  reward: '&7  ↪ Rewards: &6{money} {currency} ✦'
-  updated: '&a{player} is level {level} ({gamexp}/100 Game XP).'
-  no-permission: '&cYou do not have permission to manage game XP.'
-  players-only: '&cPlayers can use /level. Console: /gamexp view <player>.'
-  loading: '&7Your game XP is loading. Try again in a moment.'
-  unavailable: '&cGame XP could not be saved or loaded. No success is confirmed. Please contact staff.'
-  unknown-player: '&cPlayer not found. Use a player who has joined this server or their UUID.'
-  vanilla-xp-locked: '&cNormal Minecraft XP is disabled. Game levels cannot be spent here.'

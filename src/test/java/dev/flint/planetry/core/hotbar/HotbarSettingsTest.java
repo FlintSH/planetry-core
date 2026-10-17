@@ -14,20 +14,19 @@ class HotbarSettingsTest {
             assertEquals(6, settings.activationCooldownTicks());
             assertEquals(7, settings.questBook().slot());
             assertEquals(8, settings.novaLink().slot());
-            assertEquals("BOOK", settings.questBook().material().name());
-            assertEquals("COMPASS", settings.novaLink().material().name());
-            assertEquals("", settings.questBook().nexoId());
+            assertEquals("quest_book", settings.questBook().nexoId());
+            assertEquals("novalink", settings.novaLink().nexoId());
             assertEquals("", settings.novaLink().command());
             assertEquals(HotbarSettings.Executor.PLAYER, settings.questBook().executor());
         }
     }
 
-    @Test void configuredNexoDisplayCommandExecutorAndIntervalsAreRead() {
+    @Test void configuredNexoCommandExecutorAndIntervalsAreRead() {
         try (var fixture = new HotbarFixture()) {
             fixture.config.set("hotbar.enabled", false);
             fixture.config.set("hotbar.restore-interval-ticks", 80);
             fixture.config.set("hotbar.activation-cooldown-ticks", 12);
-            fixture.config.set("hotbar.quest-book.nexo-id", "quest_book");
+            fixture.config.set("hotbar.quest-book.nexo-id", "custom_quest_book");
             fixture.config.set("hotbar.quest-book.material", "PAPER");
             fixture.config.set("hotbar.quest-book.display-name", "&dQuests");
             fixture.config.set("hotbar.quest-book.command", "quests open {player} {uuid}");
@@ -36,20 +35,21 @@ class HotbarSettingsTest {
             assertFalse(settings.enabled());
             assertEquals(80, settings.restoreIntervalTicks());
             assertEquals(12, settings.activationCooldownTicks());
-            assertEquals("quest_book", settings.questBook().nexoId());
-            assertEquals("PAPER", settings.questBook().material().name());
-            assertEquals("&dQuests", settings.questBook().displayName());
+            assertEquals("custom_quest_book", settings.questBook().nexoId());
             assertEquals("quests open {player} {uuid}", settings.questBook().command());
             assertEquals(HotbarSettings.Executor.CONSOLE, settings.questBook().executor());
         }
     }
 
-    @Test void nonItemMaterialsIncludingWaterAndLavaFailClearlyInsteadOfBreakingItemCreation() {
+    @Test void oldBlankIdsUseNetworkNexoDefaultsAndRetiredFallbackOptionsAreIgnored() {
         try (var fixture = new HotbarFixture()) {
-            for (String material : new String[]{"WATER", "LAVA", "AIR", "not_a_material"}) {
-                fixture.config.set("hotbar.quest-book.material", material);
-                assertInvalid(fixture, "hotbar.quest-book.material");
-            }
+            fixture.config.set("hotbar.quest-book.nexo-id", "");
+            fixture.config.set("hotbar.novalink.nexo-id", "   ");
+            fixture.config.set("hotbar.quest-book.material", "not_a_material");
+            fixture.config.set("hotbar.novalink.display-name", "");
+            var settings = HotbarSettings.read(fixture.config);
+            assertEquals("quest_book", settings.questBook().nexoId());
+            assertEquals("novalink", settings.novaLink().nexoId());
         }
     }
 
@@ -60,8 +60,6 @@ class HotbarSettingsTest {
                 Map.entry("hotbar.activation-cooldown-ticks", 1201),
                 Map.entry("hotbar.quest-book.nexo-id", "a".repeat(129)),
                 Map.entry("hotbar.novalink.nexo-id", "item with spaces"),
-                Map.entry("hotbar.quest-book.display-name", " "),
-                Map.entry("hotbar.novalink.display-name", "a".repeat(257)),
                 Map.entry("hotbar.quest-book.command", "menu\nop Alice"),
                 Map.entry("hotbar.novalink.command", "/menu"),
                 Map.entry("hotbar.quest-book.executor", "operator"));

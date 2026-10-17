@@ -3,7 +3,6 @@ package dev.flint.planetry.core;
 import dev.flint.planetry.core.mail.*;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
@@ -17,7 +16,6 @@ import java.util.function.Predicate;
 /** Bukkit access stays on the server thread; durable mail operations use a bounded worker. */
 final class MailService implements CommandExecutor, TabCompleter, AutoCloseable {
     static final String PERMISSION = "planetry.admin.sendmail";
-    private static final LegacyComponentSerializer TEXT = LegacyComponentSerializer.legacyAmpersand();
     private static final int BATCH = 50;
     private final PlanetryCore plugin;
     private final MailStore store;
@@ -105,10 +103,10 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
         for (MailRecord mail : pending) {
             visible.add(mail.id());
             if (session.notified.add(mail.id())) {
-                Component notice = text("notice", "&d❕ {sender}&7 has sent you a gift!", Map.of("sender", mail.sender()));
+                Component notice = text("notice", "&d❕ {sender}&7 has sent you a gift!", Map.of(), Map.of("sender", Language.format(mail.sender())));
                 Component claim = text("claim-button", "&a&lCLICK TO CLAIM", Map.of())
                         .clickEvent(ClickEvent.runCommand("/mail"))
-                        .hoverEvent(Component.text("Claim your mail with /mail"));
+                        .hoverEvent(plugin.language().text("mail.claim-hover", Map.of()));
                 session.player.sendMessage(notice.append(Component.space()).append(claim));
             }
         }
@@ -119,7 +117,7 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
         if (stopping) { unavailable(sender); return true; }
         if (command.getName().equalsIgnoreCase("mail")) {
             if (!(sender instanceof Player player)) { say(sender, "players-only", "&cPlayers can claim mail with /mail.", Map.of()); return true; }
-            if (args.length != 0) { sender.sendMessage("/mail"); return true; }
+            if (args.length != 0) { say(sender, "usage", "/mail", Map.of()); return true; }
             Session session = sessions.get(player.getUniqueId());
             if (session == null || session.player != player || !ready(session)) {
                 say(sender, "not-ready", "&7Please wait until you are alive and your inventory has loaded, then use /mail again.", Map.of()); return true;
@@ -150,7 +148,7 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
                 || (action.equals("status") && args.length != 2)
                 || (action.equals("ack") && args.length != 3)) return usage(sender);
         if (action.equals("ack") && !(sender instanceof ConsoleCommandSender) && !(sender instanceof RemoteConsoleCommandSender)) {
-            sender.sendMessage("Mail acknowledgement is console-only. Check the command's effects before acknowledging."); return true;
+            say(sender, "ack-console-only", "Mail acknowledgement is console-only. Check the command's effects before acknowledging.", Map.of()); return true;
         }
         UUID acknowledgement;
         try { acknowledgement = action.equals("ack") ? UUID.fromString(args[2]) : null; }
@@ -174,12 +172,13 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
             switch (action) {
                 case "player" -> saveMail(sender, Optional.of(id), identity, commandText);
                 case "status" -> submit(() -> store.review(id, 100), records -> {
-                    sender.sendMessage("Mail requiring review: " + records.size() + " (up to 100 shown)");
-                    for (MailRecord record : records) sender.sendMessage("Mail " + record.id() + ": " + record.state()
-                            + ", server " + record.serverId() + ", sender " + record.sender() + ", command: " + record.command());
+                    say(sender, "review-header", "Mail requiring review: {count} (up to 100 shown)", Map.of("count", Integer.toString(records.size())));
+                    for (MailRecord record : records) sender.sendMessage(plugin.language().text("mail.review-entry",
+                            Map.of("id", record.id().toString(), "state", record.state().name(), "server", record.serverId(), "command", record.command()),
+                            Map.of("sender", Language.format(record.sender()))));
                 }, error -> unavailable(sender));
                 case "ack" -> submit(() -> { store.acknowledge(id, acknowledgement); return true; },
-                        ignored -> sender.sendMessage("Mail acknowledged. No command was repeated."), error -> unavailable(sender));
+                        ignored -> say(sender, "acknowledged", "Mail acknowledged. No command was repeated.", Map.of()), error -> unavailable(sender));
             }
         }, error -> unavailable(sender));
         return true;
@@ -204,14 +203,18 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
     }
     private void saveMail(CommandSender sender, Optional<UUID> target, String identity, String command) {
         submit(() -> store.send(target, identity, command), count -> {
-            say(sender, "sent", "&aMail saved for {count} player(s).", Map.of("count", Integer.toString(count)));
+            say(sender, "sent", "<green>Mail saved for {count} player(s). Command: <white>{command}",
+                    Map.of("count", Integer.toString(count), "command", command));
+            say(sender, "sent-command", "<gray>Command: <white>{command}", Map.of("command", command));
             poll();
         }, error -> unavailable(sender));
     }
     private String identity(CommandSender sender) {
-        if (!(sender instanceof Player player)) return "&d&lPLANETRY";
-        String rank = MailRanks.rank(plugin, player);
-        return rank + " &f" + player.getName();
+        Component identity = sender instanceof Player player
+                ? plugin.language().text("mail.sender-player", Map.of("player", player.getName()),
+                        Map.of("rank", MailRanks.trimTrailing(Language.format(MailRanks.rank(plugin, player)))))
+                : plugin.language().text("mail.sender-console", Map.of());
+        return MailRanks.snapshot(identity);
     }
     private void deliver(Session session, List<MailRecord> pending, int index, int delivered) {
         UUID id = session.id;
@@ -264,12 +267,12 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
     }
 
     private boolean usage(CommandSender sender) {
-        sender.sendMessage("/sendmail player <username|uuid> <command>, /sendmail all <command>");
-        sender.sendMessage("/sendmail status <username|uuid>, console: /sendmail ack <username|uuid> <mail-uuid>");
+        say(sender, "send-usage", "/sendmail player <username|uuid> <command>, /sendmail all <command>", Map.of());
+        say(sender, "review-usage", "/sendmail status <username|uuid>, console: /sendmail ack <username|uuid> <mail-uuid>", Map.of());
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (!sender.hasPermission(PERMISSION)) return List.of();
+        if (command.getName().equalsIgnoreCase("mail") || !sender.hasPermission(PERMISSION)) return List.of();
         List<String> options = args.length == 1 ? List.of("player", "all", "status")
                 : args.length == 2 && Set.of("player", "status").contains(args[0].toLowerCase(Locale.ROOT))
                 ? sessions.values().stream().map(session -> session.player.getName()).toList() : List.of();
@@ -277,14 +280,10 @@ final class MailService implements CommandExecutor, TabCompleter, AutoCloseable 
         return options.stream().filter(value -> value.toLowerCase(Locale.ROOT).startsWith(prefix)).toList();
     }
     private Component text(String key, String fallback, Map<String, String> values) {
-        String format = plugin.getConfig().getString("mail.messages." + key, fallback);
-        // Only replace configured tokens once, so sender metadata cannot introduce another token.
-        StringBuilder result = new StringBuilder();
-        var matcher = java.util.regex.Pattern.compile("\\{([a-z]+)}").matcher(format);
-        int start = 0;
-        while (matcher.find()) { result.append(format, start, matcher.start()).append(values.getOrDefault(matcher.group(1), matcher.group())); start = matcher.end(); }
-        result.append(format, start, format.length());
-        return TEXT.deserialize(result.toString());
+        return plugin.language().text("mail." + key, values);
+    }
+    private Component text(String key, String fallback, Map<String, String> values, Map<String, Component> components) {
+        return plugin.language().text("mail." + key, values, components);
     }
     private void say(CommandSender sender, String key, String fallback, Map<String, String> values) { sender.sendMessage(text(key, fallback, values)); }
     private void unavailable(CommandSender sender) {

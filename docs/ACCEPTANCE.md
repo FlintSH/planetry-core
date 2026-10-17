@@ -111,8 +111,8 @@ CORE_TEST_TYPE=mariadb CORE_TEST_PORT=3306 CORE_TEST_USER=planetry CORE_TEST_PAS
 ```
 
 Hooks mode uses a controlled **Nexo API-shape fixture**, not the actual Nexo
-plugin. It checks custom metadata preservation and unknown-ID fallback; the
-without-hooks mode checks missing-Nexo fallback. Fixtures never ship in the
+plugin. It checks custom metadata preservation and unknown-ID refusal and later recovery; the
+without-hooks mode checks missing-Nexo refusal without ordinary fallback items. Fixtures never ship in the
 plugin JAR. Existing XP/mail probes disable hotbar because their player doubles
 do not model inventory interactions. CI retains those eight probes and adds
 four hotbar modes.
@@ -125,3 +125,18 @@ settings, full inventory, and actual server transfers while Inventory Sync loads
 Confirm ordinary items are preserved and both shortcuts appear in slots 8/9 on
 every participating backend. These controlled probes do not prove client rendering
 or network-transfer compatibility. No production installation is automated.
+
+## MiniMessage, languages and mail presentation
+
+Unit coverage verifies locale selection, per-key fallback, preservation of custom
+translations and one-time legacy configuration migration, MiniMessage/legacy
+formatting, literal dynamic values, argument-free `/mail` completion and rendered
+rank spacing across formatting boundaries. The mail Paper probe verifies the
+exact stored command in both individual and broadcast send confirmations,
+including a command token containing MiniMessage-looking text and braces. It
+also exercises a rank prefix ending in spaces and a reset, while preserving the
+existing durable claims, readiness and recovery checks.
+
+On staging, inspect both languages with a real client, edit a translation and
+restart, and confirm LuckPerms prefixes and Nexo item names/models with the real
+plugins. Automated Paper players are controlled doubles, not connected clients.

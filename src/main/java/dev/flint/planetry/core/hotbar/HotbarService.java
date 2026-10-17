@@ -72,11 +72,16 @@ public final class HotbarService implements Listener, AutoCloseable {
     }
 
     HotbarService(JavaPlugin plugin, HotbarSettings settings, Predicate<Player> readiness, LongSupplier nanoTime) {
+        this(plugin, settings, readiness, nanoTime, new HotbarItems(plugin));
+    }
+
+    HotbarService(JavaPlugin plugin, HotbarSettings settings, Predicate<Player> readiness,
+                  LongSupplier nanoTime, HotbarItems items) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.readiness = Objects.requireNonNull(readiness, "readiness");
         this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
-        this.items = new HotbarItems(plugin);
+        this.items = Objects.requireNonNull(items, "items");
     }
 
     /** Register this Listener separately, then start it once during plugin enable. */
@@ -136,7 +141,7 @@ public final class HotbarService implements Listener, AutoCloseable {
         for (Session session : List.copyOf(sessions.values())) {
             if (!session.player.isOnline()) {
                 if (sessions.remove(session.player.getUniqueId(), session) && session.pending != null) session.pending.cancel();
-            } else restore(session.player);
+            } else restore(session.player, false);
         }
     }
 
@@ -156,8 +161,15 @@ public final class HotbarService implements Listener, AutoCloseable {
     }
 
     void restore(Player player) {
+        restore(player, true);
+    }
+
+    private void restore(Player player, boolean refreshItems) {
         mainThread();
         if (!usable(player)) return;
+        // Event callbacks can run between polls while Nexo disables or reloads.
+        // Polls already refreshed once for their whole batch of player sessions.
+        if (refreshItems) items.refresh(settings);
         PlayerInventory inventory = player.getInventory();
         // Only our PDC marker grants ownership. Ordinary lookalikes are player possessions.
         for (int slot = 0; slot < inventory.getSize(); slot++) {
@@ -166,12 +178,16 @@ public final class HotbarService implements Listener, AutoCloseable {
         if (items.owned(player.getItemOnCursor())) player.setItemOnCursor(null);
         for (var definition : settings.items()) {
             ItemStack current = inventory.getItem(definition.slot());
+            ItemStack template = items.template(definition);
+            if (template == null) {
+                if (items.owned(current)) inventory.setItem(definition.slot(), null);
+                continue; // Missing Nexo must never move possessions or create a generic shortcut.
+            }
             if (!HotbarItems.empty(current) && !items.owned(current)) {
                 int free = freeSlot(inventory);
                 if (free < 0) continue; // Never delete or drop possessions to reserve a slot.
                 inventory.setItem(free, current);
             }
-            ItemStack template = items.template(definition);
             if (HotbarItems.empty(current) || !items.owned(current) || current.getAmount() != 1 || !template.isSimilar(current))
                 inventory.setItem(definition.slot(), template.clone());
         }
@@ -286,6 +302,12 @@ public final class HotbarService implements Listener, AutoCloseable {
             if (candidate.slot() == player.getInventory().getHeldItemSlot() && candidate.id().equals(id)) definition = candidate;
         if (definition == null || !definition.id().equals(items.id(player.getInventory().getItem(definition.slot())))
                 || definition.command().isEmpty()) return;
+        // Check live Nexo availability, then compare with the issued template from
+        // that builder. A fresh build can contain random per-item metadata.
+        ItemStack template = items.liveTemplate(definition);
+        ItemStack held = player.getInventory().getItem(definition.slot());
+        if (template == null || item.getAmount() != 1 || held.getAmount() != 1
+                || !template.isSimilar(item) || !template.isSimilar(held)) return;
         String name = player.getName();
         if (name == null || !name.matches("[A-Za-z0-9_.-]{1,32}")) return;
         Session session = session(player);
@@ -350,11 +372,13 @@ public final class HotbarService implements Listener, AutoCloseable {
     }
 
     private boolean emptyReserved(PlayerInventory inventory) {
-        return HotbarItems.empty(inventory.getItem(7)) || HotbarItems.empty(inventory.getItem(8));
+        return settings.items().stream().anyMatch(item -> items.template(item) != null
+                && HotbarItems.empty(inventory.getItem(item.slot())));
     }
 
     private boolean protectedSlot(PlayerInventory inventory, int slot, boolean reserveEmpty) {
-        return reserved(slot) && (items.owned(inventory.getItem(slot)) || reserveEmpty && HotbarItems.empty(inventory.getItem(slot)));
+        return reserved(slot) && (items.owned(inventory.getItem(slot))
+                || reserveEmpty && items.available(slot, settings) && HotbarItems.empty(inventory.getItem(slot)));
     }
 
     private static boolean reserved(int slot) { return slot == 7 || slot == 8; }

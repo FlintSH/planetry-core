@@ -4,7 +4,6 @@ import dev.flint.planetry.core.hotbar.HotbarService;
 import dev.flint.planetry.core.hotbar.HotbarSettings;
 import dev.flint.planetry.core.progression.*;
 import dev.flint.planetry.core.storage.*;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.*;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
@@ -19,7 +18,6 @@ import java.util.logging.Level;
 
 public final class PlanetryCore extends JavaPlugin implements Listener, TabCompleter {
     private static final String PERMISSION = "planetry.adam.gamexp";
-    private static final LegacyComponentSerializer TEXT = LegacyComponentSerializer.legacyAmpersand();
     private final Map<UUID, Progress> cache = new ConcurrentHashMap<>();
     // Only touched on the server thread. Object identity fences callbacks from old sessions.
     private final Map<UUID, Player> online = new HashMap<>();
@@ -30,6 +28,7 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
     private ProgressStore store;
     private ThreadPoolExecutor worker;
     private Settings settings;
+    private Language language;
     private PlanetryExpansion expansion;
     private MailService mail;
     private HotbarService hotbar;
@@ -39,6 +38,7 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
     @Override public void onEnable() {
         try {
             saveDefaultConfig(); settings = Settings.read(getConfig());
+            language = Language.load(this);
             HotbarSettings hotbarSettings = HotbarSettings.read(getConfig());
             store = Settings.openStore(getConfig(), getDataFolder().toPath());
             worker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(1024), task -> {
@@ -56,9 +56,11 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
                     player -> message(player, "vanilla-xp-locked", Map.of())), this);
             Objects.requireNonNull(getCommand("level")).setExecutor(this);
             Objects.requireNonNull(getCommand("gamexp")).setExecutor(this);
+            getCommand("gamexp").permissionMessage(language.text("messages.no-permission", Map.of()));
             getCommand("gamexp").setTabCompleter(this);
             Objects.requireNonNull(getCommand("mail")).setExecutor(mail);
             Objects.requireNonNull(getCommand("sendmail")).setExecutor(mail);
+            getCommand("sendmail").permissionMessage(language.text("mail.no-permission", Map.of()));
             getCommand("sendmail").setTabCompleter(mail);
             mail.start();
             hotbar = new HotbarService(this, hotbarSettings,
@@ -95,6 +97,7 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
     }
 
     public Progress cachedProgress(UUID id) { return cache.get(id); }
+    public Language language() { return language; }
     @EventHandler public void join(PlayerJoinEvent event) { track(event.getPlayer()); }
     private void track(Player player) { online.put(player.getUniqueId(), player); load(player); mail.track(player); }
     @EventHandler public void quit(PlayerQuitEvent event) {
@@ -171,16 +174,17 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
         UUID id = target.getUniqueId();
         if (action.equals("rewardstatus")) {
             submit(() -> store.rewardsNeedingReview(id), records -> {
-                sender.sendMessage(TEXT.deserialize("&7Rewards requiring review: " + records.size()));
-                for (var record : records) sender.sendMessage(TEXT.deserialize("&7Level " + record.level() + ": " + record.state() + ", claim " + record.claimId() + ", server " + record.serverId()));
+                message(sender, "reward-review-header", Map.of("count", Integer.toString(records.size())));
+                for (var record : records) message(sender, "reward-review-entry", Map.of("level", Integer.toString(record.level()),
+                        "state", record.state().toString(), "claim", record.claimId().toString(), "server", record.serverId()));
             }, error -> unavailable(sender)); return true;
         }
         if (action.equals("ackreward")) {
-            if (sender instanceof Player) { sender.sendMessage("Reward acknowledgement is console-only. Check the economy and commands before acknowledging."); return true; }
+            if (sender instanceof Player) { message(sender, "reward-ack-console-only", Map.of()); return true; }
             UUID claim;
             try { claim = UUID.fromString(args[2]); } catch (IllegalArgumentException e) { return usage(sender); }
             submit(() -> { store.completeReward(id, claim, RewardOutcome.COMPLETE); return true; },
-                    ignored -> sender.sendMessage("Reward acknowledged. No money or commands were repeated."), error -> unavailable(sender)); return true;
+                    ignored -> message(sender, "reward-acknowledged", Map.of()), error -> unavailable(sender)); return true;
         }
         if (view) {
             submit(() -> store.get(id), progress -> message(sender, "updated", values(target, progress)), error -> unavailable(sender)); return true;
@@ -192,7 +196,7 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
             if (action.equals("give") && amount > Progress.MAX_GIVE) throw new IllegalArgumentException();
             if (action.equals("setlevel") && amount > Progress.MAX_LEVEL) throw new IllegalArgumentException();
         } catch (IllegalArgumentException error) {
-            sender.sendMessage("Use a nonnegative whole number. Give is limited to 10000 XP; the maximum level is 1000000."); return true;
+            message(sender, "invalid-amount", Map.of()); return true;
         }
         Operation operation = switch (action) { case "give" -> Operation.GIVE; case "take" -> Operation.TAKE; default -> Operation.SET_LEVEL; };
         submit(() -> store.mutate(id, operation, amount), result -> {
@@ -200,7 +204,7 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
             if (player != null && current(player)) { cache.put(id, result.current()); refresh(player); drainRewards(player); }
             message(sender, "updated", values(target, result.current()));
         }, error -> {
-            if (error instanceof IllegalArgumentException) sender.sendMessage("That change exceeds the maximum game level.");
+            if (error instanceof IllegalArgumentException) message(sender, "maximum-level", Map.of());
             else unavailable(sender);
         });
         return true;
@@ -217,8 +221,8 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
     }
 
     private boolean usage(CommandSender sender) {
-        sender.sendMessage("/gamexp give|take|setlevel <player|uuid> <amount>, /gamexp view <player|uuid>");
-        sender.sendMessage("/gamexp rewardstatus <player|uuid>, console: /gamexp ackreward <player|uuid> <claim-uuid>"); return true;
+        message(sender, "gamexp-usage", Map.of());
+        message(sender, "reward-usage", Map.of()); return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (!sender.hasPermission(PERMISSION)) return List.of();
@@ -284,7 +288,8 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
         return value;
     }
     private void message(CommandSender sender, String key, Map<String, String> values) {
-        sender.sendMessage(TEXT.deserialize(render(settings.messages().getOrDefault(key, key), values)));
+        sender.sendMessage(language.text("messages." + key, values, values.containsKey("currency")
+                ? Map.of("currency", Language.format(settings.currency())) : Map.of()));
     }
     private void unavailable(CommandSender sender) { message(sender, "unavailable", Map.of()); }
     @FunctionalInterface private interface Work<T> { T run() throws Exception; }

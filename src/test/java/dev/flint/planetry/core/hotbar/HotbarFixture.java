@@ -69,6 +69,9 @@ final class HotbarFixture implements AutoCloseable {
     final Map<Integer, ItemStack> container = new HashMap<>();
     final AtomicReference<ItemStack> cursor = new AtomicReference<>();
     final AtomicBoolean ready = new AtomicBoolean(true);
+    final AtomicBoolean nexoAvailable = new AtomicBoolean(true);
+    final AtomicBoolean randomNexo = new AtomicBoolean();
+    final Map<String, ItemStack> nexoItems = new HashMap<>();
     final AtomicLong time = new AtomicLong(1_000_000_000L);
     final AtomicInteger ticks = new AtomicInteger(100);
     final NamespacedKey marker = new NamespacedKey("planetrycore", "hotbar-item");
@@ -109,7 +112,8 @@ final class HotbarFixture implements AutoCloseable {
         materialFactory.when(() -> Material.matchMaterial(anyString())).thenAnswer(call -> itemMaterials.get(call.getArgument(0)));
         stackFactory.when(() -> ItemStack.of(any(Material.class))).thenAnswer(call -> {
             Material type = call.getArgument(0);
-            // Actual enum constants are safe for isAir(), which does not need a registry.
+            // Keep ordinary item enum identities; air requires this fixture's
+            // explicit isAir stub because Paper delegates it to BlockType.
             return stack(Material.valueOf(type.name()), 1);
         });
         when(plugin.namespace()).thenReturn("planetrycore");
@@ -163,6 +167,8 @@ final class HotbarFixture implements AutoCloseable {
             pollTask = mock(BukkitTask.class);
             return pollTask;
         });
+        nexoItems.put("quest_book", nexo("quest_book", Material.BOOK, "Nexo Quest Book"));
+        nexoItems.put("novalink", nexo("novalink", Material.COMPASS, "Nexo NovaLink"));
         } catch (RuntimeException | Error failure) {
             closeFactories();
             throw failure;
@@ -221,7 +227,8 @@ final class HotbarFixture implements AutoCloseable {
     static int convert(int raw) { return raw < 27 ? raw : raw < 54 ? raw - 27 + 9 : raw - 54; }
 
     HotbarService start() {
-        service = new HotbarService(plugin, HotbarSettings.read(config), ignored -> ready.get(), time::get);
+        service = new HotbarService(plugin, HotbarSettings.read(config), ignored -> ready.get(), time::get,
+                new HotbarItems(plugin, this::nexoSource));
         service.start();
         flush();
         return service;
@@ -241,6 +248,24 @@ final class HotbarFixture implements AutoCloseable {
         ItemStack result = stack(Material.BOOK, 1);
         stacks.get(result).data.put(marker, id);
         return result;
+    }
+
+    private ItemStack nexo(String id, Material type, String name) {
+        ItemStack item = stack(type, 1);
+        stacks.get(item).name = Component.text(name);
+        stacks.get(item).data.put(new NamespacedKey("nexo", "id"), id);
+        return item;
+    }
+
+    private HotbarItems.Source nexoSource(String id) {
+        ItemStack definition = nexoItems.get(id);
+        if (!nexoAvailable.get() || definition == null) return null;
+        ItemStack built = definition;
+        if (randomNexo.get()) {
+            built = definition.clone();
+            stacks.get(built).data.put(new NamespacedKey("nexo", "unique"), UUID.randomUUID().toString());
+        }
+        return new HotbarItems.Source(definition, built);
     }
 
     private ItemStack stack(StackData state) {

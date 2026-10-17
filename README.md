@@ -12,7 +12,7 @@ Folia and Spigot are not supported. Releases are tested development prereleases.
    `SHA256SUMS` verifies the download. The MariaDB source JAR is for license
    compliance; do not put that source JAR in the server's plugins folder.
 2. On a staging backend, put the plugin JAR in `plugins/` and start the server
-   once to create `plugins/PlanetryCore/config.yml`.
+   once to create `plugins/PlanetryCore/config.yml` and `lang/en.yml` / `lang/de.yml`.
 3. For money rewards, install Vault and a compatible economy provider on that
    backend. The default reward is **150 Credits per new level**. The economy
    provider controls the actual currency and its network synchronization;
@@ -70,33 +70,34 @@ hotbar:
   restore-interval-ticks: 20
   activation-cooldown-ticks: 6
   quest-book:
-    nexo-id: your_quest_book_id
-    material: BOOK
-    display-name: '&6Quest Book'
+    nexo-id: quest_book
     command: 'yourquestcommand'
     executor: player
   novalink:
-    nexo-id: your_menu_id
-    material: COMPASS
-    display-name: '&bNovaLink'
+    nexo-id: novalink
     command: 'yourmenucommand'
     executor: player
 ```
 
-The Nexo ID can reference any item defined by the backend's Nexo installation.
-Leave it empty to use the fallback material. Missing Nexo, an unknown ID or an
-unavailable API uses that material and logs a warning; lookup retries when Nexo
-finishes loading its items. Nexo item metadata is retained, then Core applies
-its configured display name and private identity marker. This uses Nexo's
+The shortcuts use **only Nexo items**, defaulting to `quest_book` and `novalink`.
+Install Nexo and define those IDs on each backend. Missing Nexo, an unknown ID
+or an unavailable item builder leaves that shortcut absent and logs a warning;
+lookup retries after Nexo finishes loading. No ordinary book or compass is
+created, and unavailable shortcuts do not displace ordinary player items. Old
+Core-managed fallback items are removed when inventory readiness permits.
+Nexo's display name, lore, model and other metadata are preserved; Core adds
+only its private marker and sets the amount to one. This uses Nexo's
 [documented item builder API](https://github.com/Nexo-MC/Nexo-Documentation/blob/master/community-guides/api.md).
 The actual Nexo version and resource pack require staging validation.
 
 Commands default to empty until configured, omit the leading slash, and accept
 `{player}` and `{uuid}`. `executor: player` uses the player's permissions;
 `executor: console` runs with console authority, so configure trusted commands.
-Names support `&` colors. The slots are fixed; `enabled: false` stops the feature.
+Names come from Nexo. The slots are fixed; `enabled: false` stops the feature.
 Restart after configuration changes. Existing configurations can add this section;
-missing keys use these defaults. Install matching configuration and Nexo item
+missing or blank Nexo IDs use `quest_book` / `novalink`. Old `material` and
+`display-name` options are ignored. Explicit nonblank IDs remain configurable.
+Install matching configuration and Nexo item
 definitions on every participating Paper/Purpur backend, not Velocity.
 
 Items return after joining, changing worlds, respawning or another plugin removing
@@ -147,7 +148,8 @@ settings are independent.
 
 ## Network mail
 
-Players use **`/mail`** without a permission to claim saved gifts. Each mail item
+Players use **`/mail`** without arguments or a permission to claim saved gifts.
+It has no tab suggestions, including for staff. Each mail item
 stores a console command and the sender's identity. A colored chat notice includes
 a clickable **CLICK TO CLAIM** prompt. Receiving mail does not execute anything;
 unclaimed mail survives restarts and players see the notice again on their next
@@ -164,6 +166,8 @@ Staff need **`planetry.admin.sendmail`** (default: operators):
 /sendmail all gamexp give {player} 100
 ```
 
+Successful sends show the number of saved mail items and the exact stored
+command. The confirmation appears only after storage confirms the send.
 Commands have no leading slash. `{player}` and `{uuid}` resolve to the recipient
 at claim time. Mail commands run as console on the **backend where the recipient
 claims**, so install the command's plugin on that backend. Commands are limited
@@ -193,7 +197,8 @@ Notices preserve the staff member's rank and name as they were when sending.
 plus its matching expansion. Core otherwise tries Vault's chat prefix/primary
 group, then `mail.fallback-rank` (default `Staff`). Configure these to match your
 rank provider. Console and other non-player senders appear as **PLANETRY**.
-All normal mail messages and `&` colors are configurable under `mail.messages`.
+Trailing spaces in a rank prefix are removed before the single separator and
+player name. Messages are configured in the selected language file below.
 
 Claims require an online, living player and Inventory Sync readiness when that
 plugin is installed. Missing command names leave mail pending so the player can
@@ -210,6 +215,32 @@ After checking command/economy records and compensating only missing effects, us
 `sendmail ack <username|uuid> <mail-uuid>` **from console**. Acknowledgement removes
 the review record and never repeats the command. Pending mail cannot be
 acknowledged this way. Keep backups and do not restore old mail data casually.
+
+## Language and formatting
+
+`language: en` selects `plugins/PlanetryCore/lang/en.yml`; `language: de` selects
+German. Both files are created on first start. Copy one to another locale name
+and select that name to add a translation. Restart after changing the selection
+or text. The setting applies to the backend, rather than each player's client.
+
+Language files contain `messages.*` for game levels and command feedback and
+`mail.*` for mail notices, buttons, hover text, sender formats and staff feedback.
+Use [MiniMessage](https://docs.advntr.dev/minimessage/format.html), for example
+`<light_purple>Level <white>{level}`. Existing `{player}`, `{level}`, `{gamexp}`,
+`{count}` and other documented tokens remain supported. Values such as a saved
+command are inserted literally, so their angle brackets and braces cannot become
+formatting or introduce another substitution. The sender/rank token preserves
+its formatted component. Legacy `&` / `§` colors remain accepted for compatibility.
+
+On the first upgrade, customized `messages.*` and `mail.messages.*` values
+are imported into the selected language file as MiniMessage. Unchanged old
+English defaults use the selected language's defaults instead. Existing
+translations are preserved; the old config remains unchanged. A private marker
+inside `lang/` prevents importing the same legacy entries on every restart.
+After upgrading, edit the language files for text changes. Missing translation
+keys fall back to the bundled locale, then English. The sent-command line is
+separate from the send-success message so existing customized success text still
+shows the saved command.
 
 ## Storage
 
@@ -257,7 +288,9 @@ these settings. Core data is independent of Inventory Sync data.
 `rewards.money` controls the per-level Vault payment. `rewards.commands` accepts
 console commands without a leading slash, with `{player}`, `{uuid}`, `{level}`
 and `{money}` substitutions. Commands execute once per newly earned level in
-ascending order. Messages and the currency label are configurable with `&` colors.
+ascending order. Messages use MiniMessage in the selected language file.
+The currency label remains configurable under `rewards.currency-label` and
+accepts MiniMessage or legacy colors.
 
 ```yaml
 rewards:

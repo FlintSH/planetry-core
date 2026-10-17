@@ -95,6 +95,14 @@ public final class MailProbe extends JavaPlugin {
 
     private void permissionAndSyntax() {
         stage = "permission and malformed commands";
+        for (Fake player : List.of(alice, staff)) {
+            check(core.getCommand("mail").tabComplete(player.player, "mail", new String[]{""}).isEmpty(),
+                    "/mail suggested staff arguments or player names");
+            check(core.getCommand("mail").tabComplete(player.player, "mail", new String[]{"p"}).isEmpty(),
+                    "/mail suggested arguments after a prefix");
+        }
+        check(core.getCommand("sendmail").tabComplete(staff.player, "sendmail", new String[]{""})
+                .containsAll(List.of("player", "all", "status")), "/sendmail lost staff completions");
         execute("sendmail", alice.player, "player", alice.id.toString(), "mailprobeaward", "denied", "{player}", "{uuid}");
         check(!alice.messages.isEmpty(), "Permission denial produced no response");
         check(alice.permissionChecks.contains(PERMISSION), "Wrong administrative permission was checked");
@@ -119,7 +127,7 @@ public final class MailProbe extends JavaPlugin {
         execute("sendmail", console, "player", "NeverJoinedMail", "mailprobeaward", "unknown", "{player}", "{uuid}");
         waitFor(() -> !consoleMessages.isEmpty(), () -> {
             check(consoleMessages.stream().anyMatch(line -> line.contains("Player not found")), "Unknown name was accepted");
-            send(console, consoleMessages, alice.id.toString(), "offline", this::offlineReminder);
+            send(console, consoleMessages, alice.id.toString(), "offline<red>{count}", this::offlineReminder);
         });
     }
 
@@ -142,7 +150,7 @@ public final class MailProbe extends JavaPlugin {
                     execute("mail", alice.player, "extra");
                     check(!alice.messages.isEmpty(), "Malformed /mail produced no usage");
                     claim(alice, 1, () -> {
-                        checkToken("offline", 1);
+                        checkToken("offline<red>{count}", 1);
                         empty(alice, () -> {
                             check(awards.size() == 1, "Repeated /mail duplicated an offline delivery");
                             registerKnownName();
@@ -180,7 +188,7 @@ public final class MailProbe extends JavaPlugin {
         send(staff.player, staff.messages, alice.name, "staff-rank", () ->
                 waitFor(() -> notice(alice, staff.name), () -> {
                     assertNotice(alice, staff.name);
-                    check(alice.messages.stream().anyMatch(line -> line.contains(rank) && line.contains(staff.name)),
+                    check(alice.messages.stream().anyMatch(line -> line.contains(rank + " " + staff.name)),
                             "Sender rank/name missing: " + alice.messages);
                     claim(alice, 1, () -> {
                         checkToken("staff-rank", 1);
@@ -232,6 +240,7 @@ public final class MailProbe extends JavaPlugin {
             waitFor(() -> consoleMessages.stream().anyMatch(line -> line.startsWith("Mail saved")), () -> {
                 check(consoleMessages.contains("Mail saved for 2 player(s)."),
                         "Broadcast did not snapshot exactly the joined online players: " + consoleMessages);
+                check(consoleMessages.contains("Command: " + command("broadcast")), "Broadcast confirmation omitted the saved command");
                 waitFor(() -> notice(alice, "PLANETRY") && notice(bob, "PLANETRY"), () -> {
                     check(count("broadcast") == 0, "Broadcast automatically executed");
                     claim(alice, 1, () -> claim(bob, 1, () -> empty(late, () -> {
@@ -483,6 +492,7 @@ public final class MailProbe extends JavaPlugin {
         execute("sendmail", sender, args.toArray(String[]::new));
         waitFor(() -> messages.stream().anyMatch(line -> line.startsWith("Mail saved")), () -> {
             check(messages.contains("Mail saved for 1 player(s)."), "Individual send was not saved once: " + messages);
+            check(messages.contains("Command: " + command), "Confirmation omitted or reformatted the exact saved command: " + messages);
             next.run();
         });
     }
@@ -680,7 +690,7 @@ public final class MailProbe extends JavaPlugin {
                 @Override public boolean persist() { return true; }
                 @Override public String onRequest(org.bukkit.OfflinePlayer player, String params) {
                     check(Bukkit.isPrimaryThread(), "Rank placeholder resolved off main thread");
-                    return params.equals("rank") && rankAvailable ? "&6ProbeRank" : "";
+                    return params.equals("rank") && rankAvailable ? "&6ProbeRank  &r" : "";
                 }
             }.register();
             check(registered, "Test rank expansion did not register with actual PlaceholderAPI");

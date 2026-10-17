@@ -83,6 +83,149 @@ class HotbarServiceTest {
         }
     }
 
+    @Test void missingNexoLeavesPossessionsAndEmptySlotsAvailableAndRetriesWhenItReturns() {
+        try (var f = new HotbarFixture()) {
+            f.nexoAvailable.set(false);
+            ItemStack ordinary = f.stack(Material.DIAMOND, 17);
+            f.storage[7] = ordinary;
+            f.start();
+            verify(f.inventory, never()).setItem(anyInt(), any());
+            assertSame(ordinary, f.storage[7]);
+            assertNull(f.storage[8]);
+            var emptyClick = click(f, 8, ClickType.LEFT, InventoryAction.PLACE_ALL);
+            f.service.click(emptyClick);
+            assertFalse(emptyClick.isCancelled());
+            ItemStack stone = f.stack(Material.STONE, 1);
+            var drag = new InventoryDragEvent(f.view, stone, stone, false, java.util.Map.of(HotbarFixture.raw(8), stone));
+            f.service.drag(drag);
+            assertFalse(drag.isCancelled());
+            f.nexoAvailable.set(true);
+            f.polling.run();
+            assertSame(ordinary, f.storage[0]);
+            assertEquals("quest-book", f.id(7));
+            assertEquals("novalink", f.id(8));
+        }
+    }
+
+    @Test void unknownNexoIdsDoNotCreateFallbacksOrDisplaceOrdinaryItems() {
+        try (var f = new HotbarFixture()) {
+            f.config.set("hotbar.quest-book.nexo-id", "unknown_item");
+            ItemStack ordinary = f.stack(Material.DIAMOND, 17);
+            f.storage[7] = ordinary;
+            f.start();
+            assertSame(ordinary, f.storage[7]);
+            assertNull(f.storage[0]);
+            assertEquals("novalink", f.id(8));
+            f.storage[7] = null;
+            var click = click(f, 7, ClickType.LEFT, InventoryAction.PLACE_ALL);
+            f.service.click(click);
+            assertFalse(click.isCancelled(), "An unavailable shortcut must not reserve its empty slot");
+            f.nexoItems.put("unknown_item", f.nexoItems.get("quest_book"));
+            f.polling.run();
+            assertEquals("quest-book", f.id(7));
+        }
+    }
+
+    @Test void onlyNexoMetadataIsUsedAndBuilderStacksAreNotMutated() {
+        try (var f = new HotbarFixture()) {
+            f.config.set("hotbar.quest-book.material", "PAPER");
+            f.config.set("hotbar.quest-book.display-name", "&cMust not replace Nexo name");
+            ItemStack source = f.nexoItems.get("quest_book");
+            source.setAmount(4);
+            f.start();
+            assertEquals(Material.BOOK, f.storage[7].getType());
+            assertEquals(Component.text("Nexo Quest Book"), f.storage[7].getItemMeta().displayName());
+            assertEquals("quest_book", f.stacks.get(f.storage[7]).data.get(new org.bukkit.NamespacedKey("nexo", "id")));
+            assertEquals(1, f.storage[7].getAmount());
+            assertEquals(4, source.getAmount());
+            assertFalse(f.stacks.get(source).data.containsKey(f.marker));
+        }
+    }
+
+    @Test void staleGenericOwnedItemsCannotActivateAndUnavailableNexoRemovesThemAfterReadiness() {
+        try (var f = new HotbarFixture()) {
+            f.config.set("hotbar.quest-book.command", "quests");
+            f.start();
+            ItemStack stale = f.owned("quest-book");
+            f.storage[7] = stale;
+            f.service.interact(interact(f, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND, stale));
+            verify(f.commands, never()).dispatch(any(), anyString());
+            f.nexoAvailable.set(false);
+            f.ready.set(false);
+            f.polling.run();
+            assertSame(stale, f.storage[7]);
+            f.ready.set(true);
+            f.polling.run();
+            assertNull(f.storage[7]);
+            assertNull(f.storage[8]);
+            f.nexoAvailable.set(true);
+            f.polling.run();
+            ItemStack genuine = f.storage[7];
+            f.nexoAvailable.set(false); // Before the next polling refresh, activation must already fail.
+            f.service.interact(interact(f, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND, genuine));
+            verify(f.commands, never()).dispatch(any(), anyString());
+            ItemStack ordinary = f.stack(Material.DIAMOND, 17);
+            f.storage[8] = ordinary;
+            f.service.restore(f.player); // A queued event callback must refresh before displacing possessions.
+            assertNull(f.storage[7]);
+            assertSame(ordinary, f.storage[8]);
+            assertNull(f.storage[0]);
+        }
+    }
+
+    @Test void emptyOrUnusableNexoBuilderResultsFailClosedWithoutFallbacks() {
+        try (var f = new HotbarFixture()) {
+            // The fixture owns Material's registry boundary; use its configured
+            // air material rather than mixing a real enum with that mocked registry.
+            f.nexoItems.put("quest_book", f.stack(f.itemMaterials.get("AIR"), 1));
+            ItemStack badMetadata = f.stack(Material.COMPASS, 1);
+            when(badMetadata.clone()).thenReturn(badMetadata);
+            when(badMetadata.getItemMeta()).thenReturn(null);
+            f.nexoItems.put("novalink", badMetadata);
+            f.start();
+            assertNull(f.storage[7]);
+            assertNull(f.storage[8]);
+            verify(f.inventory, never()).setItem(anyInt(), any());
+        }
+    }
+
+    @Test void randomBuildMetadataDoesNotChurnIssuedItemsOrPreventTheirCommands() {
+        try (var f = new HotbarFixture()) {
+            f.config.set("hotbar.quest-book.command", "quests");
+            f.randomNexo.set(true);
+            f.start();
+            ItemStack issuedQuest = f.storage[7];
+            ItemStack issuedNova = f.storage[8];
+            clearInvocations(f.inventory);
+            f.polling.run();
+            f.service.restore(f.player);
+            assertSame(issuedQuest, f.storage[7]);
+            assertSame(issuedNova, f.storage[8]);
+            verify(f.inventory, never()).setItem(anyInt(), any());
+            f.service.interact(interact(f, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND, issuedQuest));
+            verify(f.commands).dispatch(f.player, "quests");
+        }
+    }
+
+    @Test void replacingTheRegisteredBuilderRefreshesItsMetadataAndRejectsThePriorTemplate() {
+        try (var f = new HotbarFixture()) {
+            f.config.set("hotbar.quest-book.command", "quests");
+            f.randomNexo.set(true);
+            f.start();
+            ItemStack old = f.storage[7];
+            ItemStack replacement = f.nexoItems.get("quest_book").clone();
+            f.stacks.get(replacement).name = Component.text("Reloaded Nexo Quest");
+            f.nexoItems.put("quest_book", replacement);
+            f.service.interact(interact(f, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND, old));
+            verify(f.commands, never()).dispatch(any(), anyString());
+            f.polling.run();
+            assertNotSame(old, f.storage[7]);
+            assertEquals(Component.text("Reloaded Nexo Quest"), f.storage[7].getItemMeta().displayName());
+            f.service.interact(interact(f, Action.RIGHT_CLICK_AIR, EquipmentSlot.HAND, f.storage[7]));
+            verify(f.commands).dispatch(f.player, "quests");
+        }
+    }
+
     @Test void readinessGatesInitialApplicationAndLaterOwnershipTransitions() {
         try (var f = new HotbarFixture()) {
             f.ready.set(false);
