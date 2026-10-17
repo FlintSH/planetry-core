@@ -1,0 +1,20 @@
+name: PlanetryCore
+version: '${project.version}'
+main: dev.flint.planetry.core.PlanetryCore
+api-version: '26.1.2'
+authors: [FlintSH]
+description: Persistent game levels, rewards and placeholders for Planetry.
+softdepend: [Vault, PlaceholderAPI, NetworkInventorySync]
+commands:
+  level:
+    aliases: [levels]
+    description: Show your game level and XP progress.
+    usage: /level
+  gamexp:
+    description: Manage player game XP and inspect reward delivery.
+    usage: /gamexp give|take|view|setlevel <player> [amount]
+    permission: planetry.adam.gamexp
+permissions:
+  planetry.adam.gamexp:
+    description: Manage player game XP and levels.
+    default: op

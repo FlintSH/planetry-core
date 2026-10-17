@@ -1,0 +1,6 @@
+/target/
+/.agent-artifacts/
+*.log
+.env
+__pycache__/
+*.pyc

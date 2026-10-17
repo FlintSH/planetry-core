@@ -1,0 +1,46 @@
+# Restart after changes. Fixed progression: 100 game XP per level, starting at 0.
+# Quest/skill plugins award XP through the console: gamexp give Player 25
+server-id: survival-1
+storage:
+  # file is for ONE server only. For network progress choose mariadb/postgresql
+  # on every participating server, with the SAME database and table-prefix.
+  type: file
+  host: 127.0.0.1
+  port: 3306
+  database: planetry
+  username: planetry
+  password: ''
+  password-env: PLANETRY_DB_PASSWORD
+  table-prefix: planetry_core_
+  # require validates the database certificate and hostname. disable is for local tests.
+  ssl-mode: require
+display:
+  xp-bar: true
+  refresh-ticks: 20
+  # Remote changes become visible within this interval. Never does DB I/O in PAPI.
+  data-refresh-ticks: 100
+vanilla-experience:
+  # Game XP replaces normal progression. Prevent vanilla gains, death losses,
+  # mending and XP-cost enchanting/anvil actions. Creative XP-free actions remain available.
+  # This does not rewrite Inventory Sync's stored vanilla XP.
+  lock: true
+rewards:
+  money: 150.0
+  # Requires Vault AND an economy provider. Missing providers leave rewards queued.
+  currency-label: Credits
+  # Commands run as console, without a leading slash, once per newly reached level.
+  # Tokens: {player}, {uuid}, {level}, {money}. Names are checked before substitution.
+  commands: []
+  # Example: ['lp user {player} permission set planetry.level.{level} true']
+messages:
+  level: '&d❕ &7You are level &d{level}&7! (&f{gamexp}&7/100 Game XP)'
+  hint: '&7↪ Earn Game XP by completing Story Quests, completing your Journal & levelling up your Skills!'
+  level-up: '&d❕ LEVEL UP! &7You are now &dLevel {level}&7!'
+  reward: '&7  ↪ Rewards: &6{money} {currency} ✦'
+  updated: '&a{player} is level {level} ({gamexp}/100 Game XP).'
+  no-permission: '&cYou do not have permission to manage game XP.'
+  players-only: '&cPlayers can use /level. Console: /gamexp view <player>.'
+  loading: '&7Your game XP is loading. Try again in a moment.'
+  unavailable: '&cGame XP could not be saved or loaded. No success is confirmed. Please contact staff.'
+  unknown-player: '&cPlayer not found. Use a player who has joined this server or their UUID.'
+  vanilla-xp-locked: '&cNormal Minecraft XP is disabled. Game levels cannot be spent here.'
