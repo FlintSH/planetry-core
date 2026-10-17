@@ -70,6 +70,20 @@ jobs:
           CORE_TEST_TYPE: mariadb
           CORE_TEST_PORT: '3306'
         run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar"
+      - name: Real Paper mail commands and offline delivery
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --mail
+      - name: Real Paper mail without optional plugins
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --mail --without-hooks
+      - name: Real Paper shared PostgreSQL mail
+        env:
+          CORE_TEST_TYPE: postgresql
+          CORE_TEST_PORT: '5432'
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --mail
+      - name: Real Paper shared MariaDB mail
+        env:
+          CORE_TEST_TYPE: mariadb
+          CORE_TEST_PORT: '3306'
+        run: python3 scripts/smoke.py "target/planetry-core-1.0.${GITHUB_RUN_NUMBER}.jar" --mail
       - name: Checksum tested artifacts
         working-directory: target
         run: sha256sum planetry-core-*.jar mariadb-java-client-*-sources.jar > SHA256SUMS

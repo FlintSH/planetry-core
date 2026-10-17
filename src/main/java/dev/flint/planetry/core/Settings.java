@@ -1,6 +1,7 @@
 package dev.flint.planetry.core;
 
 import dev.flint.planetry.core.storage.*;
+import dev.flint.planetry.core.mail.*;
 import org.bukkit.configuration.file.FileConfiguration;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -34,6 +35,19 @@ record Settings(boolean xpBar, boolean lockVanillaExperience, int refreshTicks, 
     static ProgressStore openStore(FileConfiguration c, Path data) throws Exception {
         String type = c.getString("storage.type", "file").toLowerCase(Locale.ROOT);
         if (type.equals("file")) return new FileProgressStore(data.resolve("players"));
+        Database db = database(c, type);
+        return new JdbcProgressStore(db.connections(), db.dialect(), db.prefix());
+    }
+
+    static MailStore openMailStore(FileConfiguration c, Path data) throws Exception {
+        String type = c.getString("storage.type", "file").toLowerCase(Locale.ROOT);
+        if (type.equals("file")) return new FileMailStore(data.resolve("mail"));
+        Database db = database(c, type);
+        return new JdbcMailStore(db.connections(), db.dialect(), db.prefix());
+    }
+
+    private record Database(ConnectionFactory connections, JdbcProgressStore.Dialect dialect, String prefix) { }
+    private static Database database(FileConfiguration c, String type) throws Exception {
         if (!Set.of("mariadb", "postgresql").contains(type)) throw new IllegalArgumentException("Unknown storage.type");
         String host = c.getString("storage.host", "127.0.0.1");
         String database = c.getString("storage.database", "planetry");
@@ -64,7 +78,7 @@ record Settings(boolean xpBar, boolean lockVanillaExperience, int refreshTicks, 
         }
         String address = host.contains(":") ? "[" + host + "]" : host;
         String url = "jdbc:" + type + "://" + address + ":" + port + "/" + database;
-        return new JdbcProgressStore(() -> DriverManager.getConnection(url, props),
+        return new Database(() -> DriverManager.getConnection(url, props),
                 type.equals("mariadb") ? JdbcProgressStore.Dialect.MARIADB : JdbcProgressStore.Dialect.POSTGRESQL,
                 c.getString("storage.table-prefix", "planetry_core_"));
     }

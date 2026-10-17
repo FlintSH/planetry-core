@@ -91,6 +91,72 @@ disabled/incompatible Inventory Sync also blocks the overlay. Disabling Core
 restores the current underlying vanilla XP display. The vanilla lock and display
 settings are independent.
 
+## Network mail
+
+Players use **`/mail`** without a permission to claim saved gifts. Each mail item
+stores a console command and the sender's identity. A colored chat notice includes
+a clickable **CLICK TO CLAIM** prompt. Receiving mail does not execute anything;
+unclaimed mail survives restarts and players see the notice again on their next
+join. Remote sends appear within about five seconds. One `/mail` claims up to 50
+items; repeat it for a larger inbox. Repeated claims advance past gifts whose
+commands are unavailable locally, and revisit skipped gifts on the next pass.
+
+Staff need **`planetry.admin.sendmail`** (default: operators):
+
+```text
+/sendmail player <username|uuid> <command>
+/sendmail all <command>
+/sendmail player Alex give {player} minecraft:diamond 3
+/sendmail all gamexp give {player} 100
+```
+
+Commands have no leading slash. `{player}` and `{uuid}` resolve to the recipient
+at claim time. Mail commands run as console on the **backend where the recipient
+claims**, so install the command's plugin on that backend. Commands are limited
+to one line and 2048 characters. This permission grants the ability to queue
+console commands; give it only to trusted staff. Items, money, game XP and other
+gifts depend on the command you choose. For an `all` gift, use a recipient token
+rather than a fixed player name.
+
+`player` accepts names known to any participating Core backend, including offline
+players, or an explicit UUID. Core remembers names from joins after this upgrade;
+the local server's cached names also work. Unknown names do not cause a blocking
+remote lookup. Use the UUID for someone who has never joined. `all` snapshots
+players currently online across the shared database, including other backends.
+It does not send to every historical player or future join. Presence refreshes
+every five seconds and expires after 30 seconds if a backend crashes; a recent
+disconnect can remain in that snapshot until its cleanup/expiry completes.
+
+Network mail requires Core on **every participating Paper/Purpur backend**, the
+same MariaDB/PostgreSQL database and table prefix, unique `server-id` values and
+consistent authenticated forwarded UUIDs. No Velocity plugin update is needed.
+File storage provides mail on one server only. New mail tables are added without
+changing existing game-level data. Restart backends after upgrading or changing
+settings. Storage engine changes still require a separate offline migration.
+
+Notices preserve the staff member's rank and name as they were when sending.
+`mail.rank-placeholder` defaults to `%luckperms_prefix%` and needs PlaceholderAPI
+plus its matching expansion. Core otherwise tries Vault's chat prefix/primary
+group, then `mail.fallback-rank` (default `Staff`). Configure these to match your
+rank provider. Console and other non-player senders appear as **PLANETRY**.
+All normal mail messages and `&` colors are configurable under `mail.messages`.
+
+Claims require an online, living player and Inventory Sync readiness when that
+plugin is installed. Missing command names leave mail pending so the player can
+claim on the appropriate backend. A claim is durably reserved before running its
+command. Concurrent claims across backends cannot execute the same mail twice.
+Console effects cannot be committed atomically with the mail database: a crash,
+disconnect or command failure can leave an uncertain/partial delivery. Core never
+automatically repeats that command. A command returning success can still fail
+inside its own plugin; operators must inspect its records.
+
+Staff inspect uncertain items with `/sendmail status <username|uuid>`. This shows
+up to 100 retained claims, including the mail UUID, sender, command and backend.
+After checking command/economy records and compensating only missing effects, use
+`sendmail ack <username|uuid> <mail-uuid>` **from console**. Acknowledgement removes
+the review record and never repeats the command. Pending mail cannot be
+acknowledged this way. Keep backups and do not restore old mail data casually.
+
 ## Storage
 
 Default `storage.type: file` stores each UUID in an atomic, forced-to-disk file.

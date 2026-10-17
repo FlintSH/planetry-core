@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise PlanetryCore inside a disposable Paper 26.1.2 server.
 
-Usage: python3 scripts/smoke.py target/planetry-core-VERSION.jar [--without-hooks]
+Usage: python3 scripts/smoke.py target/planetry-core-VERSION.jar [--mail] [--without-hooks]
 Requires JAVA_HOME (JDK 25) and target/test-classpath.txt from Maven.
 CORE_TEST_TYPE defaults to file; postgresql/mariadb use CORE_TEST_* variables
 pointing to a throwaway database. Never reads production configuration.
@@ -67,6 +67,8 @@ def build_fixture(java, classpath, work, name, source, dependencies=(), vault_ap
         descriptor += "depend: [" + ", ".join(dependencies) + "]\n"
     if source == "CoreProbe":
         descriptor += "commands:\n  coreprobeaward:\n    description: Test-only console reward recorder\n"
+    if source == "MailProbe":
+        descriptor += "commands:\n  mailprobeaward:\n    description: Test-only console mail recorder\n"
     (classes / "plugin.yml").write_text(descriptor, encoding="utf-8")
     subprocess.run(
         [str(java.with_name("jar")), "--create", "--file", str(work / "plugins" / (source + ".jar")),
@@ -74,7 +76,7 @@ def build_fixture(java, classpath, work, name, source, dependencies=(), vault_ap
     )
 
 
-def test_config(plugin, without_hooks=False):
+def test_config(plugin, without_hooks=False, mail=False):
     """Return isolated test configuration; all credentials are test-only inputs."""
     engine = os.environ.get("CORE_TEST_TYPE", "file").lower()
     if engine not in {"file", "postgresql", "mariadb"}:
@@ -82,7 +84,7 @@ def test_config(plugin, without_hooks=False):
     port = os.environ.get("CORE_TEST_PORT", "5432" if engine == "postgresql" else "3306")
     prefix = "smoke_" + os.urandom(5).hex() + "_"
     quote = json.dumps
-    commands = "[]" if without_hooks else "['coreprobeaward {player} {level} {money}']"
+    commands = "[]" if without_hooks or mail else "['coreprobeaward {player} {level} {money}']"
     config = f"""server-id: {quote('smoke-' + os.urandom(5).hex())}
 storage:
   type: {engine}
@@ -99,10 +101,13 @@ display:
   refresh-ticks: 20
   data-refresh-ticks: 100
 rewards:
-  money: 150.0
+  money: {0.0 if mail else 150.0}
   currency-label: Credits
   commands: {commands}
 """
+    if mail:
+        # A registered test expansion exercises actual PAPI without LuckPerms.
+        config += "mail:\n  rank-placeholder: '%mailprobe_rank%'\n  fallback-rank: '&cStaff'\n"
     with zipfile.ZipFile(plugin) as archive:
         defaults = archive.read("config.yml").decode("utf-8")
     if "\nmessages:" not in defaults:
@@ -114,7 +119,8 @@ rewards:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("plugin", type=pathlib.Path)
-    parser.add_argument("--without-hooks", action="store_true", help="prove startup and XP commands without Vault, PlaceholderAPI or Inventory Sync")
+    parser.add_argument("--mail", action="store_true", help="run independent mail acceptance coverage instead of the XP probe")
+    parser.add_argument("--without-hooks", action="store_true", help="run without Vault, PlaceholderAPI or Inventory Sync")
     arguments = parser.parse_args()
     java = pathlib.Path(os.environ["JAVA_HOME"]) / "bin/java"
     plugin = arguments.plugin.resolve()
@@ -126,7 +132,7 @@ def main():
     paper = fetch(PAPER_URL, PAPER_SHA)
     papi = None if arguments.without_hooks else fetch(PAPI_URL, PAPI_SHA)
     os.environ.setdefault("CORE_TEST_PASSWORD", "")
-    engine, config = test_config(plugin, arguments.without_hooks)
+    engine, config = test_config(plugin, arguments.without_hooks, arguments.mail)
     with tempfile.TemporaryDirectory(prefix="planetry-core-paper-") as temporary:
         work = pathlib.Path(temporary)
         (work / "plugins/PlanetryCore").mkdir(parents=True)
@@ -145,11 +151,16 @@ def main():
             'generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}\n',
             encoding="utf-8"
         )
-        if arguments.without_hooks:
+        if arguments.without_hooks and not arguments.mail:
             build_fixture(java, classpath, work, "NoHooksProbe", "NoHooksProbe", ("PlanetryCore",))
-        else:
+        elif not arguments.without_hooks:
             build_fixture(java, classpath, work, "Vault", "VaultFixture", vault_api=vault_api)
             build_fixture(java, classpath, work, "NetworkInventorySync", "InventoryFixture")
+        if arguments.mail:
+            dependencies = ("PlanetryCore",) if arguments.without_hooks else (
+                "PlanetryCore", "PlaceholderAPI", "Vault", "NetworkInventorySync")
+            build_fixture(java, classpath, work, "MailProbe", "MailProbe", dependencies)
+        elif not arguments.without_hooks:
             build_fixture(java, classpath, work, "CoreProbe", "CoreProbe",
                           ("PlanetryCore", "PlaceholderAPI", "Vault", "NetworkInventorySync"))
         process = subprocess.Popen(
@@ -178,12 +189,20 @@ def main():
             while not output.empty():
                 lines.append(output.get_nowait())
             log = "".join(lines)
-            success = "CORE_NO_HOOKS_PROBE_OK" if arguments.without_hooks else "CORE_PROBE_OK"
-            if success not in log or "CORE_PROBE_FAILED" in log:
+            success = "CORE_MAIL_PROBE_OK" if arguments.mail else (
+                "CORE_NO_HOOKS_PROBE_OK" if arguments.without_hooks else "CORE_PROBE_OK")
+            if success not in log or "CORE_PROBE_FAILED" in log or "CORE_MAIL_PROBE_FAILED" in log:
                 raise AssertionError("PlanetryCore probe failed")
             if process.returncode != 0:
                 raise AssertionError(f"Paper exited {process.returncode}")
-            checks = "startup without Vault/PlaceholderAPI/Inventory Sync, commands and XP display" if arguments.without_hooks else "startup, commands, reward failure/recovery, PlaceholderAPI and XP display"
+            if arguments.mail:
+                checks = "mail commands, reminders, explicit claims, permission/session/readiness gates, broadcast snapshots, bounded batches and failure review/ack"
+                if arguments.without_hooks:
+                    checks += " without Vault/PlaceholderAPI/Inventory Sync"
+                else:
+                    checks += " with actual PlaceholderAPI and optional-hook fixtures"
+            else:
+                checks = "startup without Vault/PlaceholderAPI/Inventory Sync, commands and XP display" if arguments.without_hooks else "startup, commands, reward failure/recovery, PlaceholderAPI and XP display"
             print(f"PASS: real Paper 26.1.2 PlanetryCore {checks}, {engine} storage")
         finally:
             if process.poll() is None:

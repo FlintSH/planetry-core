@@ -32,6 +32,27 @@ rewards:
   # Tokens: {player}, {uuid}, {level}, {money}. Names are checked before substitution.
   commands: []
   # Example: ['lp user {player} permission set planetry.level.{level} true']
+mail:
+  # Rank is captured when staff send mail. Requires the matching PAPI expansion.
+  # Falls back to a Vault chat prefix/primary group, then fallback-rank.
+  rank-placeholder: '%luckperms_prefix%'
+  fallback-rank: '&cStaff'
+  # Mail polling and presence heartbeat run every 5 seconds. Crash presence expires after 30s.
+  messages:
+    notice: '&d❕ {sender}&7 has sent you a gift!'
+    claim-button: '&a&lCLICK TO CLAIM'
+    sent: '&aMail saved for {count} player(s).'
+    empty: '&7You have no unclaimed mail.'
+    claimed: '&aClaimed {count} mail item(s). Use /mail again if more remain.'
+    busy: '&7Your mail is already being claimed.'
+    no-permission: '&cYou do not have permission to send mail.'
+    players-only: '&cPlayers can claim mail with /mail.'
+    not-ready: '&7Please wait until you are alive and your inventory has loaded, then use /mail again.'
+    unknown-player: '&cPlayer not found. Use a player who has joined a participating backend, or their UUID.'
+    invalid-command: '&cUse one console command without a leading slash (maximum 2048 characters). Tokens: {player}, {uuid}.'
+    command-unavailable: '&cA mail command is unavailable on this backend. Your mail is still saved; contact staff or claim on the correct server.'
+    review: '&cA mail item needs staff review. It will not be repeated automatically.'
+    unavailable: '&cMail storage could not confirm this operation. Contact staff before repeating a send or claim.'
 messages:
   level: '&d❕ &7You are level &d{level}&7! (&f{gamexp}&7/100 Game XP)'
   hint: '&7↪ Earn Game XP by completing Story Quests, completing your Journal & levelling up your Skills!'

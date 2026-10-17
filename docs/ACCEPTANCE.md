@@ -62,3 +62,37 @@ the disposable server.
   staging; a Paper fixture probe does not prove these combinations.
 - During a controlled test-only outage, verify progress is not confirmed until
   saved, then inspect and reconcile any uncertain reward claim. Keep backups.
+
+## Mail regression coverage
+
+The common mail store contract runs against durable file storage and both real
+SQL engines. It covers offline and all-online sends, persistent names, restart
+recovery, exclusive file ownership, fenced sessions, concurrent claims, retained
+uncertain claims and console acknowledgement. SQL tests also cover rollback,
+ambiguous commits and network presence expiry using the database clock.
+
+Run the packaged mail probe in addition to the progression probes above:
+
+```sh
+python3 scripts/smoke.py target/planetry-core-1.0.0.jar --mail
+python3 scripts/smoke.py target/planetry-core-1.0.0.jar --mail --without-hooks
+CORE_TEST_TYPE=postgresql CORE_TEST_PORT=5432 CORE_TEST_USER=planetry CORE_TEST_PASSWORD=core-test-only python3 scripts/smoke.py target/planetry-core-1.0.0.jar --mail
+CORE_TEST_TYPE=mariadb CORE_TEST_PORT=3306 CORE_TEST_USER=planetry CORE_TEST_PASSWORD=core-test-only python3 scripts/smoke.py target/planetry-core-1.0.0.jar --mail
+```
+
+MailProbe uses controlled player doubles in real Paper, rather than connected
+Minecraft clients. It checks mail permission enforcement, offline names and join
+reminders, clickable claim components, console and staff identity, recipient
+substitution, all-online targeting, repeated claim prevention, command failure
+review/acknowledgement and optional-hook absence. With the readiness fixture it
+also checks that mail cannot be claimed before inventory authority is ready.
+CI runs these checks on the same packaged JAR that it releases.
+
+On staging, use two actual clients and backends sharing the database. Send to a
+player on the other backend, send to a disconnected player, send `all`, and
+transfer before claiming. Confirm the rank provider, green clickable prompt and
+command results with the real economy/item plugins. Test the production Purpur
+build and full plugin set there. Check inventory capacity and the chosen reward
+command's behavior when a player's inventory is full. Core does not determine
+whether another plugin silently dropped or rejected a gift. Do not run these
+checks on production or infer a real-client result from the automated fixtures.

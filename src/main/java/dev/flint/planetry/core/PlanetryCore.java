@@ -29,6 +29,7 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
     private ThreadPoolExecutor worker;
     private Settings settings;
     private PlanetryExpansion expansion;
+    private MailService mail;
     private volatile boolean stopping;
     private long nextRewardWarning;
 
@@ -44,12 +45,18 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
                     catch (Exception error) { getLogger().severe("Storage close failed"); }
                 }
             };
+            mail = new MailService(this, Settings.openMailStore(getConfig(), getDataFolder().toPath()),
+                    settings.serverId(), this::inventoryReady);
             getServer().getPluginManager().registerEvents(this, this);
             getServer().getPluginManager().registerEvents(new VanillaExperienceGuard(settings.lockVanillaExperience(),
                     player -> message(player, "vanilla-xp-locked", Map.of())), this);
             Objects.requireNonNull(getCommand("level")).setExecutor(this);
             Objects.requireNonNull(getCommand("gamexp")).setExecutor(this);
             getCommand("gamexp").setTabCompleter(this);
+            Objects.requireNonNull(getCommand("mail")).setExecutor(mail);
+            Objects.requireNonNull(getCommand("sendmail")).setExecutor(mail);
+            getCommand("sendmail").setTabCompleter(mail);
+            mail.start();
             if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
                 expansion = PlanetryExpansion.attach(this);
             }
@@ -66,6 +73,7 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
 
     @Override public void onDisable() {
         stopping = true;
+        if (mail != null) mail.close();
         if (expansion != null) expansion.detach();
         for (Player player : online.values()) if (player.isOnline()) player.sendExperienceChange(player.getExp(), player.getLevel());
         online.clear(); cache.clear(); advancementSnapshots.clear();
@@ -79,8 +87,9 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
 
     public Progress cachedProgress(UUID id) { return cache.get(id); }
     @EventHandler public void join(PlayerJoinEvent event) { track(event.getPlayer()); }
-    private void track(Player player) { online.put(player.getUniqueId(), player); load(player); }
+    private void track(Player player) { online.put(player.getUniqueId(), player); load(player); mail.track(player); }
     @EventHandler public void quit(PlayerQuitEvent event) {
+        if (mail != null) mail.quit(event.getPlayer());
         UUID id = event.getPlayer().getUniqueId();
         if (online.get(id) == event.getPlayer()) { online.remove(id); cache.remove(id); advancementSnapshots.remove(id); }
     }
