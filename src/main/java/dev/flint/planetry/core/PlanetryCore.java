@@ -116,6 +116,10 @@ public final class PlanetryCore extends JavaPlugin implements Listener, TabCompl
     public JournalService journal() { return journal; }
     public HarvestService harvest() { return harvest; }
     @EventHandler public void join(PlayerJoinEvent event) { track(event.getPlayer()); }
+    @EventHandler(priority = EventPriority.HIGHEST) public void suppressJoinMessage(PlayerJoinEvent event) {
+        // Network join announcements are owned by Velocity.
+        event.joinMessage(null);
+    }
     private void track(Player player) { online.put(player.getUniqueId(), player); load(player); mail.track(player); }
     @EventHandler public void quit(PlayerQuitEvent event) {
         if (mail != null) mail.quit(event.getPlayer());

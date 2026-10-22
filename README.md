@@ -28,6 +28,11 @@ before changing storage or upgrading. Hot reload/plugin managers are unsupported
 
 ## Commands and behavior
 
+Core suppresses the vanilla backend "joined the server" announcement on every
+join, including transfers between backends. Network join announcements belong
+to Velocity. This is automatic after upgrading Core and restarting each backend;
+no configuration change is needed.
+
 | Command | Permission | Behavior |
 | --- | --- | --- |
 | `/planetrycore reload` | `planetry.admin.reload` | Reload language messages and the language selection; other settings require restart |

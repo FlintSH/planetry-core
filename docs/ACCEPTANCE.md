@@ -32,7 +32,10 @@ backend concurrency, transactional rollback and ambiguous commit outcomes.
 The runtime probe downloads checksum-pinned Paper 26.1.2 build 74 and actual
 PlaceholderAPI 2.12.3. It starts a temporary flat server on loopback with an
 ephemeral port and 768 MiB heap. Test-only economy and Inventory Sync readiness
-fixtures use controlled players. It verifies commands/permissions, reward money
+fixtures use controlled players. The progression probes dispatch join events
+through Paper and verify the vanilla backend announcement is suppressed with
+and without optional hooks; the hooks probe also covers an already suppressed
+join on reconnect. They verify commands/permissions, reward money
 and console substitutions, PAPI expansion, display packets, rejoin persistence,
 readiness gating for both rewards and display, unavailable/declined economy
 providers, review acknowledgement, and restoration of unchanged vanilla XP. The
@@ -43,6 +46,9 @@ the disposable server.
 
 ## Operator staging checklist
 
+- Join through Velocity and transfer between backends with a real client.
+  Confirm Velocity supplies the configured network announcement and no vanilla
+  backend "joined the server" line appears.
 - Test a real player using `/level` and `/levels` without staff permissions.
   Confirm give/take/setlevel permissions with the network permission provider.
 - Check exactly 99→100 XP and a multi-level grant. Confirm the game XP display,

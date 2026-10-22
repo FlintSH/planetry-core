@@ -330,6 +330,7 @@ def main():
                     checks += " with actual PlaceholderAPI and optional-hook fixtures"
             else:
                 checks = "startup without Vault/PlaceholderAPI/Inventory Sync, commands and XP display" if arguments.without_hooks else "startup, commands, reward failure/recovery, PlaceholderAPI and XP display"
+                checks += "; backend join announcement suppression through Paper event dispatch"
             print(f"PASS: real Paper 26.1.2 PlanetryCore {checks}, {engine} storage")
         finally:
             if process.poll() is None:

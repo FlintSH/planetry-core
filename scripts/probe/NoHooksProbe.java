@@ -30,7 +30,10 @@ public final class NoHooksProbe extends JavaPlugin {
                 check(loaded instanceof PlanetryCore && loaded.isEnabled(), "Core did not enable without optional hooks");
                 core = (PlanetryCore) loaded;
                 player = fakePlayer();
-                core.join(new PlayerJoinEvent(player, Component.empty()));
+                var join = new PlayerJoinEvent(player,
+                        Component.translatable("multiplayer.player.joined", Component.text("NoHooksProbe")));
+                Bukkit.getPluginManager().callEvent(join);
+                check(join.joinMessage() == null, "Core allowed the vanilla backend join announcement without optional hooks");
                 waitFor(() -> core.cachedProgress(id) != null, () -> {
                     core.getCommand("gamexp").execute(Bukkit.getConsoleSender(), "gamexp", new String[]{"give", id.toString(), "250"});
                     waitFor(() -> core.cachedProgress(id) != null && core.cachedProgress(id).level() == 2

@@ -71,7 +71,10 @@ public final class CoreProbe extends JavaPlugin implements CommandExecutor {
                 check(alias != null && alias.getPlugin() == core, "/levels alias is not registered");
                 console = sender("CoreProbeConsole", true, consoleMessages);
                 player = new Fake();
-                core.join(new PlayerJoinEvent(player.player, Component.empty()));
+                var join = new PlayerJoinEvent(player.player,
+                        Component.translatable("multiplayer.player.joined", Component.text("CoreProbe")));
+                Bukkit.getPluginManager().callEvent(join);
+                check(join.joinMessage() == null, "Core allowed the vanilla backend join announcement");
                 waitFor(() -> progress() != null, this::initial);
             } catch (Throwable error) { fail(error); }
         });
@@ -146,9 +149,14 @@ public final class CoreProbe extends JavaPlugin implements CommandExecutor {
                     Bukkit.getPluginManager().callEvent(new PlayerAdvancementDoneEvent(previous.player, advancement, Component.empty()));
                     driftVanilla(previous);
                     previous.online = false;
-                    core.quit(new PlayerQuitEvent(previous.player, Component.empty(), PlayerQuitEvent.QuitReason.DISCONNECTED));
+                    Component quitMessage = Component.translatable("multiplayer.player.left", Component.text("CoreProbe"));
+                    var quit = new PlayerQuitEvent(previous.player, quitMessage, PlayerQuitEvent.QuitReason.DISCONNECTED);
+                    Bukkit.getPluginManager().callEvent(quit);
+                    check(quitMessage.equals(quit.quitMessage()), "Join suppression changed the quit announcement");
                     player = new Fake(previous.id);
-                    core.join(new PlayerJoinEvent(player.player, Component.empty()));
+                    var join = new PlayerJoinEvent(player.player, (Component) null);
+                    Bukkit.getPluginManager().callEvent(join);
+                    check(join.joinMessage() == null, "Core replaced an already suppressed join announcement");
                     after(3, () -> {
                         check(previous.vanillaLevel == 19 && previous.vanillaTotal == 500 && previous.xpSetterCalls == 3,
                                 "Advancement guard restored XP into an old player session");
@@ -196,9 +204,11 @@ public final class CoreProbe extends JavaPlugin implements CommandExecutor {
                 new ItemStack(Material.DIAMOND_PICKAXE), 30, java.util.Map.of(), Enchantment.EFFICIENCY, 1, 0);
         Bukkit.getPluginManager().callEvent(enchant);
         check(enchant.isCancelled(), "Default vanilla XP lock allowed survival enchanting");
+        var topInventory = Bukkit.createInventory(null, 9);
         AnvilView anvilView = (AnvilView) Proxy.newProxyInstance(AnvilView.class.getClassLoader(),
                 new Class<?>[]{AnvilView.class}, (proxy, method, args) -> switch (method.getName()) {
                     case "getPlayer" -> player.player;
+                    case "getTopInventory" -> topInventory;
                     case "getRepairCost" -> 4;
                     case "convertSlot" -> args[0];
                     default -> defaultValue(method.getReturnType());
